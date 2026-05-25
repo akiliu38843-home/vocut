@@ -62,6 +62,26 @@ voiceover.md  +  urls.txt (optional)
 
 ---
 
+## Try it (5 minutes)
+
+```bash
+git clone <repo> && cd vocut
+pip install -e .
+
+export VOCUT_LLM_BASE_URL=https://api.openai.com/v1   # or any OpenAI-compatible endpoint
+export VOCUT_LLM_API_KEY=sk-...
+
+cd examples/quickstart
+./run.sh
+```
+
+This synthesizes 5 footage clips, generates a TTS voiceover from `script.md`,
+runs the whole index → plan → render pipeline, and opens the resulting mp4.
+See [examples/quickstart/README.md](./examples/quickstart/README.md) for details
+on how it works, what to expect, and platform notes.
+
+---
+
 ## Stack
 
 | Layer | Choice | License |

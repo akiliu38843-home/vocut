@@ -1,0 +1,7 @@
+# Generated artifacts — regenerate with run.sh / make_*.sh
+work/
+footage/
+voiceover.wav
+plan.json
+output.mp4
+.vocut_index/

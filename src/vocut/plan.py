@@ -651,11 +651,19 @@ def plan(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(plan_doc, indent=2, ensure_ascii=False))
 
+    # Hybrid matches keep `confidence` under `primary`; flatten for the summary.
+    def _conf(m: dict) -> float:
+        if "confidence" in m:
+            return m["confidence"]
+        if "primary" in m and isinstance(m["primary"], dict):
+            return m["primary"].get("confidence", 0.0)
+        return 0.0
+
     return {
         "sentences": len(sentences),
         "match_types": stats_match_types,
         "mean_confidence": round(
-            float(np.mean([p["match"]["confidence"] for p in plan_items])), 3
+            float(np.mean([_conf(p["match"]) for p in plan_items])), 3
         )
         if plan_items
         else 0.0,
