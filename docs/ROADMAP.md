@@ -91,6 +91,7 @@ Full technical detail: [ARCHITECTURE.md](./ARCHITECTURE.md).
 - Chapter-aware rendering (Markdown headings → chapter cards)
 - Caption style presets (minimalist / TED-style / keyword-highlight)
 - Polished CLI UX (`init` / `index` / `plan` / `render` / `dev` watch mode)
+- **Multilingual support** — switch embedding default from `bge-small-zh-v1.5` (Chinese-only) to `bge-m3` (100+ languages). Validate cross-language alignment on the realistic case "Chinese voiceover + English / Japanese B-roll" and document a supported-language matrix. Whisper already handles 99 languages on the transcription side; the bottleneck is embedding cross-language match quality.
 
 ### P2 — Public release (1+ month after P1)
 

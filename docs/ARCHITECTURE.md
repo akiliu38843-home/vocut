@@ -179,6 +179,13 @@ No After Effects, no Lottie, no AI image generation. Every motion graphic is a R
 
 ---
 
+## Known limitations (P0)
+
+- **Embedding is Chinese-optimized by default.** The default `BAAI/bge-small-zh-v1.5` model performs poorly on cross-language matching (e.g. Chinese voiceover + English B-roll). Workaround for now: `export VOCUT_EMBED_MODEL=BAAI/bge-m3` before running `vocut index` to use the multilingual model (2.3 GB). P1 will make `bge-m3` the default once we've validated quality on real bilingual content. Whisper transcription itself already supports 99 languages out of the box.
+- **Footage with audio-only sources renders as a black video.** WAV / MP3 segments produce no visual frame in the rough cut. This is intentional for the dogfood phase (gives a duration anchor); real productions should use video sources.
+- **Motion-graphic placeholders are Pillow-drawn text cards.** Real Claude-design Remotion components land in P0.3.
+- **No voiceover-to-sentence timing alignment yet.** `--voiceover` simply overlays the audio onto the concatenated visuals; the visual timing follows clip duration + a fixed card duration, not the voiceover. Aligned timing is P1.
+
 ## Performance targets (P0 dogfood)
 
 | Stage | Target on M1/M2 16GB |
