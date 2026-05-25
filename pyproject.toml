@@ -42,8 +42,8 @@ dev = [
 vocut = "vocut.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/REPLACE_OWNER/vocut"
-Issues = "https://github.com/REPLACE_OWNER/vocut/issues"
+Homepage = "https://github.com/akiliu38843-home/vocut"
+Issues = "https://github.com/akiliu38843-home/vocut/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vocut"]
