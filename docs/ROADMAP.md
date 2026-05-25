@@ -72,8 +72,8 @@ Full technical detail: [ARCHITECTURE.md](./ARCHITECTURE.md).
 | P0.1 | `vocut index ./footage/` — transcribes, embeds into local sqlite ✓ |
 | P0.1.5 | `vocut fetch <url\|file>` — thin yt-dlp wrapper, idempotent ✓ |
 | P0.2 | `vocut plan script.md` — emits `plan.json` (Claude rerank + heuristic fallback) ✓ |
-| P0.3 | 5 motion-graphic components: `key_number` / `pull_quote` / `title_card` / `comparison_panel` / `list_item` |
-| P0.4 | `vocut render plan.json` — produces final mp4 with caption burn-in |
+| P0.3 | 5 Remotion motion-graphic components: `key_number` / `pull_quote` / `title_card` / `comparison_panel` / `list_item` |
+| P0.4 | `vocut render plan.json` — produces final mp4 with caption burn-in ✓ (with Pillow placeholders until P0.3 Remotion lands) |
 | P0.5 | Maintainer dogfoods a real 15min video |
 
 **P0 absolutely must include** (revised based on PoC findings):

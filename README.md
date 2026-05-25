@@ -51,7 +51,7 @@ voiceover.md  +  urls.txt (optional)
                 plan.json
                        │
                        ▼
-                vocut render        ← P0.4 (todo)
+                vocut render        ← P0.4 ✓ (cards as motion-graphic placeholders)
                   ├─ auto-editor pre-clean
                   ├─ moviepy / ffmpeg assemble
                   └─ Remotion motion graphics
