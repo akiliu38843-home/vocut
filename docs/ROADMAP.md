@@ -69,8 +69,9 @@ Full technical detail: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 | Milestone | Deliverable |
 |---|---|
-| P0.1 | `vocut index ./footage/` — transcribes, tags, embeds into local sqlite |
-| P0.2 | `vocut plan script.md` — emits `plan.json` (sentence ↔ clip OR motion graphic) |
+| P0.1 | `vocut index ./footage/` — transcribes, embeds into local sqlite ✓ |
+| P0.1.5 | `vocut fetch <url\|file>` — thin yt-dlp wrapper, idempotent ✓ |
+| P0.2 | `vocut plan script.md` — emits `plan.json` (Claude rerank + heuristic fallback) ✓ |
 | P0.3 | 5 motion-graphic components: `key_number` / `pull_quote` / `title_card` / `comparison_panel` / `list_item` |
 | P0.4 | `vocut render plan.json` — produces final mp4 with caption burn-in |
 | P0.5 | Maintainer dogfoods a real 15min video |

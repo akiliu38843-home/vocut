@@ -45,7 +45,7 @@ voiceover.md  +  urls.txt (optional)
                 footage.db
                        │
                        ▼
-                vocut plan          ← P0.2 (in progress)
+                vocut plan          ← P0.2 ✓ (heuristic + Claude rerank)
                        │
                        ▼
                 plan.json

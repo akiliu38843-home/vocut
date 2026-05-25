@@ -43,6 +43,53 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     return 0 if summary["errors"] == 0 else 1
 
 
+def _cmd_plan(args: argparse.Namespace) -> int:
+    from vocut.index import db_path_in
+    from vocut.plan import DEFAULT_LLM_MODEL, plan
+
+    script_path = Path(args.script).resolve()
+    if not script_path.exists():
+        print(f"error: script not found: {script_path}", file=sys.stderr)
+        return 2
+
+    db_path = Path(args.db).resolve() if args.db else db_path_in(Path.cwd())
+    if not db_path.exists():
+        print(
+            f"error: index db not found: {db_path}\n  run `vocut index <folder>` first",
+            file=sys.stderr,
+        )
+        return 2
+
+    output_path = Path(args.out).resolve() if args.out else Path("plan.json").resolve()
+    llm_model = args.llm_model or DEFAULT_LLM_MODEL
+
+    def progress(event: dict) -> None:
+        phase = event.get("phase")
+        if phase == "load_embedder":
+            print(f"  loading embedder: {event['model']}", file=sys.stderr)
+        elif phase == "embed_script":
+            print(f"  embedding {event['n']} sentences", file=sys.stderr)
+        elif phase == "match":
+            print(
+                f"  [{event['i']}/{event['total']}] matching "
+                f"({event['n_candidates']} candidates)",
+                file=sys.stderr,
+            )
+
+    stats = plan(
+        script_path=script_path,
+        db_path=db_path,
+        output_path=output_path,
+        llm_model=llm_model,
+        topk=args.topk,
+        confidence_threshold=args.threshold,
+        use_llm=False if args.no_llm else None,
+        progress_callback=progress,
+    )
+    print(json.dumps(stats, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _cmd_index(args: argparse.Namespace) -> int:
     from vocut.index import (
         DEFAULT_EMBED_MODEL,
@@ -142,7 +189,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print stats about existing index; do not index any new files",
     )
 
-    sub.add_parser("plan", help="Generate plan.json from voiceover script + indexed library")
+    p_plan = sub.add_parser(
+        "plan", help="Generate plan.json from voiceover script + indexed library"
+    )
+    p_plan.add_argument("script", help="Markdown voiceover script")
+    p_plan.add_argument("--db", help="Path to index database (default: ./.vocut_index/footage.db)")
+    p_plan.add_argument(
+        "--out", help="Output path for plan.json (default: ./plan.json)"
+    )
+    p_plan.add_argument(
+        "--llm-model",
+        default=None,
+        help="Claude model for rerank (default: env VOCUT_LLM_MODEL or claude-haiku-4-5)",
+    )
+    p_plan.add_argument(
+        "--topk", type=int, default=5, help="How many cosine candidates to send to the LLM (default 5)"
+    )
+    p_plan.add_argument(
+        "--threshold",
+        type=float,
+        default=0.6,
+        help="Confidence threshold (heuristic mode only) (default 0.6)",
+    )
+    p_plan.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Force heuristic mode even if ANTHROPIC_API_KEY is set",
+    )
+
     sub.add_parser("render", help="Render plan.json into final mp4")
     sub.add_parser("dev", help="Watch mode — re-plan and re-render on script change")
 
@@ -155,6 +229,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "fetch":
         return _cmd_fetch(args)
+
+    if args.command == "plan":
+        return _cmd_plan(args)
 
     # Inject defaults for whisper / embed models (so env var can take effect lazily)
     if args.command == "index":
