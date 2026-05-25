@@ -1,0 +1,22 @@
+{
+  "name": "@vocut/components",
+  "version": "0.0.1",
+  "description": "Claude-design-style motion-graphic components for vocut, built on Remotion.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "preview": "remotion studio src/Root.tsx",
+    "render-card": "remotion render src/Root.tsx Card output.mp4"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.330",
+    "@remotion/cli": "^4.0.330"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}
