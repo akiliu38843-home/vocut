@@ -8,6 +8,41 @@ import sys
 from pathlib import Path
 
 
+def _cmd_fetch(args: argparse.Namespace) -> int:
+    from vocut.fetch import DEFAULT_OUT_DIR, DISCLAIMER, fetch_all, parse_url_input
+
+    urls = parse_url_input(args.input)
+    if not urls:
+        print("error: no URLs to fetch", file=sys.stderr)
+        return 2
+
+    out_dir = Path(args.to) if args.to else DEFAULT_OUT_DIR
+    print(f"⚠️  {DISCLAIMER}", file=sys.stderr)
+
+    def progress(event: dict) -> None:
+        phase = event.get("phase")
+        if phase == "begin":
+            print(f"[{event['i']}/{event['total']}] {event['url']}", file=sys.stderr)
+        elif phase == "done":
+            r = event["result"]
+            if r["status"] == "downloaded":
+                print(f"  → downloaded: {Path(r['path']).name}", file=sys.stderr)
+            elif r["status"] == "skipped":
+                print(f"  → skipped (already in archive)", file=sys.stderr)
+            else:
+                print(f"  → error: {r.get('error','?')[:200]}", file=sys.stderr)
+
+    summary = fetch_all(
+        urls=urls,
+        out_dir=out_dir,
+        force=args.force,
+        quiet=not args.verbose,
+        progress_callback=progress,
+    )
+    print(json.dumps(summary, indent=2, ensure_ascii=False))
+    return 0 if summary["errors"] == 0 else 1
+
+
 def _cmd_index(args: argparse.Namespace) -> int:
     from vocut.index import (
         DEFAULT_EMBED_MODEL,
@@ -68,6 +103,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("init", help="Scaffold a new vocut project in current directory")
 
+    p_fetch = sub.add_parser(
+        "fetch",
+        help="Download footage via yt-dlp (requires `pip install vocut[fetch]`)",
+    )
+    p_fetch.add_argument(
+        "input", help="A single URL, or a path to a text file with one URL per line"
+    )
+    p_fetch.add_argument("--to", help="Output folder (default: ./footage/)")
+    p_fetch.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download even if URL is in the download archive",
+    )
+    p_fetch.add_argument(
+        "-v", "--verbose", action="store_true", help="Show yt-dlp progress output"
+    )
+
     p_index = sub.add_parser("index", help="Index a footage library (transcribe + embed + store)")
     p_index.add_argument("folder", nargs="?", help="Footage folder to scan (recursive)")
     p_index.add_argument("--db", help="Path to index database (default: ./.vocut_index/footage.db)")
@@ -100,6 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "fetch":
+        return _cmd_fetch(args)
 
     # Inject defaults for whisper / embed models (so env var can take effect lazily)
     if args.command == "index":

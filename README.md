@@ -9,12 +9,14 @@
 
 ## What it does
 
-Give vocut your voiceover script + a folder of footage clips. It will:
+Give vocut your voiceover script + a folder of footage clips (or a list of URLs).
+It will:
 
-1. Index the footage library (Whisper transcription + visual tagging)
-2. Match each script sentence to the best clip via semantic search + LLM rerank
-3. Fill the gaps with **Claude design**-style code-driven motion graphics
-4. Render the final video — captions, transitions, everything baked in
+1. (Optional) Download footage from YouTube / Bilibili / etc. via yt-dlp
+2. Index the footage library (Whisper transcription + visual tagging)
+3. Match each script sentence to the best clip via semantic search + LLM rerank
+4. Fill the gaps with **Claude design**-style code-driven motion graphics
+5. Render the final video — captions, transitions, everything baked in
 
 **Designed for**: voiceover-first knowledge creators (financial / tech / history / philosophy YouTubers and bilibili UPs) who spend 4-8 hours per video manually pairing their script with B-roll.
 
@@ -25,21 +27,37 @@ Give vocut your voiceover script + a folder of footage clips. It will:
 ## Pipeline (planned)
 
 ```
-voiceover.md + ./footage/*.mp4
-        │
-        ├─ Whisper transcribe footage
-        ├─ Vision LLM tag visuals  
-        ├─ Embed → sqlite-vss index
-        │
-        ▼
-   plan.json (sentence ↔ clip alignment, with confidence scores)
-        │
-        ├─ auto-editor pre-clean (silence/filler removal)
-        ├─ ffmpeg + moviepy assemble footage segments
-        ├─ Remotion render motion-graphic overlays
-        │
-        ▼
-     output.mp4
+voiceover.md  +  urls.txt (optional)
+                       │
+                       ▼
+                vocut fetch         ← P0.1.5 ✓ (yt-dlp thin wrapper)
+                       │
+                       ▼
+                ./footage/*.mp4
+                       │
+                       ▼
+                vocut index         ← P0.1 ✓
+                  ├─ Whisper transcribe
+                  ├─ embed (bge-small-zh-v1.5)
+                  └─ sqlite store
+                       │
+                       ▼
+                footage.db
+                       │
+                       ▼
+                vocut plan          ← P0.2 (in progress)
+                       │
+                       ▼
+                plan.json
+                       │
+                       ▼
+                vocut render        ← P0.4 (todo)
+                  ├─ auto-editor pre-clean
+                  ├─ moviepy / ffmpeg assemble
+                  └─ Remotion motion graphics
+                       │
+                       ▼
+                output.mp4
 ```
 
 ---
@@ -48,9 +66,11 @@ voiceover.md + ./footage/*.mp4
 
 | Layer | Choice | License |
 |---|---|---|
-| Transcription | Whisper / faster-whisper | MIT |
-| Embedding | bge-m3 | MIT |
-| Vector store | sqlite-vss | MIT |
+| Footage fetch (optional) | yt-dlp | Unlicense |
+| ffmpeg binary | imageio-ffmpeg (bundled, cross-platform) | BSD-2-Clause |
+| Transcription | faster-whisper | MIT |
+| Embedding | sentence-transformers (default: bge-small-zh-v1.5) | MIT |
+| Vector store | sqlite (raw bytes BLOBs in P0; sqlite-vec in P1) | public domain / MIT |
 | Auto-clean | WyattBlue/auto-editor | Unlicense |
 | Composition | moviepy + FFmpeg | MIT + LGPL |
 | Motion graphics | Remotion | Custom (free for individuals) |

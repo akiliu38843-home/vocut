@@ -26,7 +26,7 @@ This roadmap is grounded in:
 2. **Motion graphics are a structural substitute for footage, not decoration** — when no clip semantically matches a sentence, an animated component fills the slot. Visual coverage is a system goal, not a creator burden.
 3. **CLI first, no UI in P0** — UX investment doesn't earn its keep until the alignment algorithm proves itself.
 4. **Self-host only, no hosted SaaS** — the maintainer cost of running a SaaS for an OSS tool is not justified. Users run vocut on their own machines.
-5. **Don't fetch footage** — users acquire footage via yt-dlp / browser extensions / their own recording. vocut consumes a local folder.
+5. **Footage acquisition is a thin yt-dlp wrapper, not a scraping engine** — `vocut fetch` lets users download via yt-dlp's battle-tested extractors (Optional dep, `pip install vocut[fetch]`). vocut itself does not maintain platform-specific extractors, AIGC generation, or any scraping cleverness — yt-dlp owns that domain. Users remain responsible for copyright / fair-use compliance.
 
 ---
 
@@ -162,7 +162,7 @@ These influence P1+ design and will be answered as the maintainer uses the tool 
 
 ## Out of scope (do not propose features for these)
 
-- Automatic footage download / scraping
+- Maintaining platform-specific scrapers (we wrap yt-dlp; we don't fix YouTube extractor regressions ourselves)
 - AIGC video generation (text-to-video models)
 - Live streaming overlays
 - Multi-creator collaboration
@@ -170,5 +170,7 @@ These influence P1+ design and will be answered as the maintainer uses the tool 
 - Mobile app
 - Avatar generation / lip sync
 - Short-form (< 5 min) optimization
+
+- Automatic footage download (handled by `vocut fetch` as a thin yt-dlp wrapper; we don't build extractors)
 
 Each of these is a different product. vocut is one product, one purpose.
