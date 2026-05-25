@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual envs
+venv/
+env/
+ENV/
+.venv/
+
+# Node (Remotion side)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# vocut runtime
+*.db
+*.sqlite
+*.sqlite3
+output/
+footage_cache/
+.vocut_index/
+*.mp4
+*.mp3
+*.wav
+*.srt
+!examples/*/expected_output/*.mp4
+
+# secrets
+.env
+.env.local
+*.key
+.anthropic_*
+
+# OS
+.DS_Store
+Thumbs.db
