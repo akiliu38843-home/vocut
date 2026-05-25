@@ -51,6 +51,7 @@ footage_cache/
 *.wav
 *.srt
 !examples/*/expected_output/*.mp4
+!tests/fixtures/*.wav
 
 # secrets
 .env

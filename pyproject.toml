@@ -24,12 +24,14 @@ classifiers = [
     "Topic :: Multimedia :: Video",
 ]
 dependencies = [
-    # P0 — populated as we wire up the pipeline
-    # "openai-whisper>=20240930",
-    # "moviepy>=2.0.0",
-    # "auto-editor>=27.0.0",
-    # "anthropic>=0.40.0",
-    # "sqlite-vec>=0.1.0",
+    # P0.1 — index pipeline (transcribe + embed + store)
+    "faster-whisper>=1.0.0",
+    "sentence-transformers>=3.0.0",
+    "numpy>=1.26",
+    "av>=12.0",              # PyAV — replaces system ffmpeg for audio extraction
+    "tqdm>=4.66",
+    # P0.2 — plan (LLM rerank). Preinstalled but not yet wired.
+    "anthropic>=0.40.0",
 ]
 
 [project.optional-dependencies]
