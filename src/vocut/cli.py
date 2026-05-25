@@ -43,6 +43,45 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     return 0 if summary["errors"] == 0 else 1
 
 
+def _cmd_render(args: argparse.Namespace) -> int:
+    from vocut.render import render
+
+    plan_path = Path(args.plan).resolve()
+    if not plan_path.exists():
+        print(f"error: plan not found: {plan_path}", file=sys.stderr)
+        return 2
+    voiceover = Path(args.voiceover).resolve() if args.voiceover else None
+    if voiceover and not voiceover.exists():
+        print(f"error: voiceover not found: {voiceover}", file=sys.stderr)
+        return 2
+    out_path = Path(args.out).resolve()
+
+    def progress(event: dict) -> None:
+        phase = event.get("phase")
+        if phase == "segment":
+            print(
+                f"  [{event['i']}/{event['total']}] rendering {event['kind']}",
+                file=sys.stderr,
+            )
+        elif phase == "concat":
+            print(f"  concatenating {event['n']} segments", file=sys.stderr)
+        elif phase == "overlay_voiceover":
+            print("  overlaying voiceover audio", file=sys.stderr)
+
+    stats = render(
+        plan_path=plan_path,
+        out_path=out_path,
+        voiceover=voiceover,
+        fps=args.fps,
+        width=args.width,
+        height=args.height,
+        card_duration_sec=args.card_duration,
+        progress_callback=progress,
+    )
+    print(json.dumps(stats, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _cmd_plan(args: argparse.Namespace) -> int:
     from vocut.index import db_path_in
     from vocut.plan import DEFAULT_LLM_MODEL, plan
@@ -217,7 +256,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force heuristic mode even if ANTHROPIC_API_KEY is set",
     )
 
-    sub.add_parser("render", help="Render plan.json into final mp4")
+    p_render = sub.add_parser("render", help="Render plan.json into final mp4")
+    p_render.add_argument("plan", help="plan.json from `vocut plan`")
+    p_render.add_argument("--out", default="output.mp4", help="Output mp4 path (default: ./output.mp4)")
+    p_render.add_argument("--voiceover", help="Voiceover audio (mp3/wav) to overlay")
+    p_render.add_argument("--fps", type=int, default=30)
+    p_render.add_argument("--width", type=int, default=1280)
+    p_render.add_argument("--height", type=int, default=720)
+    p_render.add_argument(
+        "--card-duration",
+        type=float,
+        default=4.0,
+        help="Seconds per motion-graphic placeholder card (default 4)",
+    )
     sub.add_parser("dev", help="Watch mode — re-plan and re-render on script change")
 
     return parser
@@ -232,6 +283,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "plan":
         return _cmd_plan(args)
+
+    if args.command == "render":
+        return _cmd_render(args)
 
     # Inject defaults for whisper / embed models (so env var can take effect lazily)
     if args.command == "index":
