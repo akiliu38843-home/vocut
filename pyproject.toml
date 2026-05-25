@@ -31,8 +31,9 @@ dependencies = [
     "av>=12.0",              # PyAV — audio extraction for Whisper
     "imageio-ffmpeg>=0.5.0", # bundles ffmpeg binary cross-platform (no system install)
     "tqdm>=4.66",
-    # P0.2 — plan (LLM rerank). Preinstalled but not yet wired.
+    # P0.2 — plan (LLM rerank). Either provider works:
     "anthropic>=0.40.0",
+    "openai>=1.50.0",        # also supports any OpenAI-compatible base_url
 ]
 
 [project.optional-dependencies]

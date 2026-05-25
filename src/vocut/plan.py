@@ -26,9 +26,23 @@ from typing import Any
 
 import numpy as np
 
-DEFAULT_LLM_MODEL = os.environ.get("VOCUT_LLM_MODEL", "claude-haiku-4-5-20251001")
 DEFAULT_TOPK = 5
 DEFAULT_CONFIDENCE_THRESHOLD = 0.6
+
+# Auto-select a default model. Custom OpenAI-compatible endpoints (uyilink etc.)
+# get a sensible GPT-5.x default; Anthropic native gets haiku-4-5.
+def _default_llm_model() -> str:
+    explicit = os.environ.get("VOCUT_LLM_MODEL")
+    if explicit:
+        return explicit
+    if os.environ.get("VOCUT_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL"):
+        return "gpt-5.4-mini"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "gpt-4o-mini"
+    return "claude-haiku-4-5-20251001"
+
+
+DEFAULT_LLM_MODEL = _default_llm_model()
 
 # Motion-graphic catalog (PoC v1+v2 validated these as the P0 essentials).
 MOTION_GRAPHIC_COMPONENTS = {
@@ -214,14 +228,11 @@ RERANK_TOOL = {
 }
 
 
-def rerank_with_llm(
-    client,
+def _format_user_msg(
     sentence: str,
     candidates: list[dict[str, Any]],
     section: dict[str, Any] | None,
-    model: str,
-) -> dict[str, Any]:
-    """One Claude call to pick the best match. Returns the tool input as dict."""
+) -> str:
     if not candidates:
         candidates_block = "(no candidate clips — recommend motion_graphic)"
     else:
@@ -239,13 +250,23 @@ def rerank_with_llm(
         else ""
     )
 
-    user_msg = (
+    return (
         f"{section_hint}"
         f"Sentence: {sentence!r}\n\n"
         f"Candidate clips:\n{candidates_block}\n\n"
         f"Pick the best match via the select_match tool."
     )
 
+
+def rerank_with_anthropic(
+    client,
+    sentence: str,
+    candidates: list[dict[str, Any]],
+    section: dict[str, Any] | None,
+    model: str,
+) -> dict[str, Any]:
+    """One Claude call (Anthropic API) to pick the best match."""
+    user_msg = _format_user_msg(sentence, candidates, section)
     response = client.messages.create(
         model=model,
         max_tokens=1024,
@@ -257,7 +278,44 @@ def rerank_with_llm(
     for block in response.content:
         if getattr(block, "type", None) == "tool_use":
             return dict(block.input)
-    raise RuntimeError("Claude did not return a tool_use block")
+    raise RuntimeError("Anthropic did not return a tool_use block")
+
+
+def rerank_with_openai(
+    client,
+    sentence: str,
+    candidates: list[dict[str, Any]],
+    section: dict[str, Any] | None,
+    model: str,
+) -> dict[str, Any]:
+    """One OpenAI-compatible call to pick the best match.
+
+    Uses Chat Completions tools API with tool_choice='required' (forces tool
+    use without naming the specific tool — compatible with backends like
+    uyilink that don't support `tool_choice: {function: ...}`)."""
+    user_msg = _format_user_msg(sentence, candidates, section)
+    openai_tool = {
+        "type": "function",
+        "function": {
+            "name": RERANK_TOOL["name"],
+            "description": RERANK_TOOL["description"],
+            "parameters": RERANK_TOOL["input_schema"],
+        },
+    }
+    response = client.chat.completions.create(
+        model=model,
+        max_tokens=1024,
+        messages=[
+            {"role": "system", "content": LLM_SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        tools=[openai_tool],
+        tool_choice="required",
+    )
+    msg = response.choices[0].message
+    if msg.tool_calls:
+        return json.loads(msg.tool_calls[0].function.arguments)
+    raise RuntimeError("OpenAI-compatible backend did not return a tool_call")
 
 
 # -----------------------------------------------------------------------------
@@ -443,17 +501,49 @@ def _read_index_meta(conn: sqlite3.Connection) -> dict[str, Any] | None:
     return {"embed_model": row[0], "embed_dim": row[1]}
 
 
-def _try_load_anthropic_client():
-    """Return an Anthropic client if API key is set, else None."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-    try:
-        import anthropic
+def _try_load_llm_client() -> tuple[Any, str] | tuple[None, None]:
+    """Return (client, provider_tag) for whichever LLM provider is configured.
 
-        return anthropic.Anthropic(api_key=api_key)
-    except ImportError:
-        return None
+    Order of preference:
+      1. VOCUT_LLM_BASE_URL + VOCUT_LLM_API_KEY → OpenAI-compatible
+         (any third-party gateway: uyilink, deepseek, ollama, vllm, etc.)
+      2. OPENAI_API_KEY (+ optional OPENAI_BASE_URL) → OpenAI proper or compat
+      3. ANTHROPIC_API_KEY → Anthropic native
+
+    Returns (None, None) if none are configured.
+    """
+    vocut_base = os.environ.get("VOCUT_LLM_BASE_URL")
+    vocut_key = os.environ.get("VOCUT_LLM_API_KEY")
+    if vocut_base and vocut_key:
+        try:
+            import openai
+
+            return openai.OpenAI(api_key=vocut_key, base_url=vocut_base), "openai"
+        except ImportError:
+            pass
+
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            import openai
+
+            kwargs = {"api_key": openai_key}
+            if os.environ.get("OPENAI_BASE_URL"):
+                kwargs["base_url"] = os.environ["OPENAI_BASE_URL"]
+            return openai.OpenAI(**kwargs), "openai"
+        except ImportError:
+            pass
+
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        try:
+            import anthropic
+
+            return anthropic.Anthropic(api_key=anthropic_key), "anthropic"
+        except ImportError:
+            pass
+
+    return None, None
 
 
 def plan(
@@ -487,13 +577,18 @@ def plan(
     finally:
         conn.close()
 
-    client = None
+    client, provider = (None, None)
     if use_llm is None:
-        client = _try_load_anthropic_client()
+        client, provider = _try_load_llm_client()
     elif use_llm:
-        client = _try_load_anthropic_client()
+        client, provider = _try_load_llm_client()
         if client is None:
-            raise RuntimeError("use_llm=True but ANTHROPIC_API_KEY not set / anthropic not installed")
+            raise RuntimeError(
+                "use_llm=True but no LLM provider configured. Set one of:\n"
+                "  - VOCUT_LLM_BASE_URL + VOCUT_LLM_API_KEY (OpenAI-compatible)\n"
+                "  - OPENAI_API_KEY (+ optional OPENAI_BASE_URL)\n"
+                "  - ANTHROPIC_API_KEY"
+            )
 
     if progress_callback:
         progress_callback({"phase": "load_embedder", "model": embed_model_name})
@@ -525,7 +620,10 @@ def plan(
                 }
             )
         if client is not None:
-            match = rerank_with_llm(
+            rerank_fn = (
+                rerank_with_openai if provider == "openai" else rerank_with_anthropic
+            )
+            match = rerank_fn(
                 client, s["text"], candidates, s.get("section"), llm_model
             )
         else:
@@ -542,6 +640,7 @@ def plan(
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "embed_model": embed_model_name,
             "llm_model": llm_model if client else None,
+            "llm_provider": provider,
             "llm_used": client is not None,
             "confidence_threshold": confidence_threshold,
             "topk": topk,
