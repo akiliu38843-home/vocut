@@ -81,19 +81,35 @@ def get_lottie_manifest() -> dict[str, Any]:
     return _LOTTIE_MANIFEST_CACHE
 
 
-def pick_lottie_id(sentence: str, seed: int = 0) -> str:
+def pick_lottie_id(
+    sentence: str,
+    seed: int = 0,
+    tag: str | None = None,
+) -> str:
     """Pick a Lottie animation id from the manifest. Deterministic — same
     inputs always return the same id.
 
-    Strategy: rotate through manifest entries by seed; future enhancement
-    can add tag-matching against sentence keywords.
+    Strategy:
+      1. If `tag` is provided, narrow to animations carrying that tag (LLM
+         supplies it via `lottie_tag`).
+      2. Within the candidate set, rotate by seed so adjacent lottie scenes
+         pick different animations even when they share a tag.
+      3. Fall back to the full pool (then to "ripple") if nothing matches.
     """
     manifest = get_lottie_manifest()
     anims = manifest.get("animations", [])
     if not anims:
         return "ripple"  # safe default present in the vendored set
-    idx = seed % len(anims)
-    return anims[idx]["id"]
+
+    candidates = anims
+    if tag:
+        t = tag.lower().strip()
+        tagged = [a for a in anims if t in [x.lower() for x in a.get("tags", [])]]
+        if tagged:
+            candidates = tagged
+
+    idx = seed % len(candidates)
+    return candidates[idx]["id"]
 
 # Motion-graphic catalog (PoC v1+v2 validated these as the P0 essentials).
 MOTION_GRAPHIC_COMPONENTS = {
@@ -229,12 +245,15 @@ def _assign_motion_styles(
         # Lottie supplies its own visual background; bg_style does not apply.
         if component == "lottie":
             chosen_bg = None
-            # Pick a Lottie id if the caller didn't specify one.
+            # Pick a Lottie id if the caller didn't specify one. LLM-suggested
+            # `lottie_tag` narrows the pool to thematically matching animations.
             if not target.get("props"):
                 target["props"] = {}
             if not target["props"].get("lottie_id") and not target["props"].get("lottie_src"):
                 target["props"]["lottie_id"] = pick_lottie_id(
-                    item.get("sentence", ""), seed=seed,
+                    item.get("sentence", ""),
+                    seed=seed,
+                    tag=target.get("lottie_tag"),
                 )
         elif target.get("bg_style"):
             chosen_bg = target["bg_style"]
@@ -424,9 +443,18 @@ Motion-graphic components (pick whichever fits the sentence semantics):
   - title_card       section transitions, chapter markers
   - comparison_panel explicit comparisons (A vs B, before vs after, multi-region)
   - list_item        enumerated items ("首先/其次", "第一/第二", "A、B、C")
-  - keyword_highlight generic fallback for short emphatic statements
+  - keyword_highlight generic short emphatic statements WITH a clear keyword to highlight
+  - lottie           atmospheric / illustrative scene with no specific structural element —
+                     a designer-made animation carries the visual, your caption sits on top.
+                     Use it for transitional / mood sentences ("镜头转到…", "故事的开端是…",
+                     抽象比喻 / 氛围铺垫 / 没有具体数字或列表的过渡句).
+                     When picking lottie, also set `lottie_tag` to ONE of these themes
+                     so the right animation gets chosen:
+                       abstract | data | nature | organic | minimal | particles |
+                       lights | festive | celebration | character | scifi | header
 
-Be honest with confidence. If no candidate is a good match, score it low and pick motion_graphic.
+Be honest with confidence. If no candidate is a good match AND no structural component
+(number/quote/list/comparison) fits, prefer lottie over keyword_highlight for variety.
 """
 
 RERANK_TOOL = {
@@ -452,6 +480,15 @@ RERANK_TOOL = {
             "props": {
                 "type": "object",
                 "description": "Component props, e.g. {'primary': '4.2 亿', 'unit': '美元'}",
+            },
+            "lottie_tag": {
+                "type": "string",
+                "description": (
+                    "When component is 'lottie', pick one theme tag from this set: "
+                    "abstract, data, nature, organic, minimal, particles, lights, "
+                    "festive, celebration, character, scifi, header. "
+                    "Ignored for non-lottie components."
+                ),
             },
             "confidence": {
                 "type": "number",
@@ -697,27 +734,33 @@ def build_plan_item(
             "confidence": float(match.get("confidence", 0.0)),
         }
         if match_type == "hybrid":
+            overlay = {
+                "type": "motion_graphic",
+                "component": match.get("component", "keyword_highlight"),
+                "props": match.get("props", {}),
+            }
+            if match.get("component") == "lottie" and match.get("lottie_tag"):
+                overlay["lottie_tag"] = match["lottie_tag"]
             item["match"] = {
                 "type": "hybrid",
                 "primary": footage_block,
-                "overlay": {
-                    "type": "motion_graphic",
-                    "component": match.get("component", "keyword_highlight"),
-                    "props": match.get("props", {}),
-                },
+                "overlay": overlay,
                 "reasoning": match.get("reasoning", ""),
             }
         else:
             item["match"] = {**footage_block, "reasoning": match.get("reasoning", "")}
         item["duration_estimate_sec"] = round(clip["end_sec"] - clip["start_sec"], 2)
     else:
-        item["match"] = {
+        mg = {
             "type": "motion_graphic",
             "component": match.get("component", "keyword_highlight"),
             "props": match.get("props", {}),
             "confidence": float(match.get("confidence", 0.0)),
             "reasoning": match.get("reasoning", ""),
         }
+        if match.get("component") == "lottie" and match.get("lottie_tag"):
+            mg["lottie_tag"] = match["lottie_tag"]
+        item["match"] = mg
     return item
 
 
