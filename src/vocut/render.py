@@ -276,7 +276,8 @@ def render_remotion_segment(
         "sentence": item.get("sentence", ""),
         "durationInFrames": total_frames,
     }
-    for k in ("palette", "bg_style", "text_motion", "accent_fx"):
+    for k in ("palette", "bg_style", "text_motion", "accent_fx",
+              "scene_idx", "total_scenes", "section_label", "style_pack"):
         v = _take(k)
         if v is not None:
             card_props[k] = v

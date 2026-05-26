@@ -13,6 +13,7 @@
 import React from "react";
 import { z } from "zod";
 import { CardBackground, type BgStyle } from "./CardBackground";
+import { SceneFrame } from "./SceneFrame";
 import type { AccentFxMode } from "./motion/AccentFx";
 import type { TextMotionMode } from "./motion/TextMotion";
 import { ComparisonPanel } from "./components/ComparisonPanel";
@@ -41,6 +42,16 @@ export const cardSchema = z.object({
   /** Composition duration override; consumed by Root.calculateMetadata. */
   durationInFrames: z.number().int().positive().optional(),
 
+  // ─── SceneFrame metadata ─────────────────────────────────────────────────
+  /** 0-indexed position of this scene in the full plan (for "01/16" monitor). */
+  scene_idx: z.number().int().nonnegative().optional(),
+  /** Total number of scenes in the plan. */
+  total_scenes: z.number().int().positive().optional(),
+  /** Section label shown in the monitor text. */
+  section_label: z.string().optional(),
+  /** Active style pack name — controls frame decoration style. */
+  style_pack: z.string().optional(),
+
   // ─── Variation knobs ─────────────────────────────────────────────────────
   /** Which color palette to use. Default: "editorial_dark". */
   palette: z.string().optional(),
@@ -62,6 +73,10 @@ export const Card: React.FC<CardProps> = ({
   bg_style,
   text_motion,
   accent_fx,
+  scene_idx,
+  total_scenes,
+  section_label,
+  style_pack,
 }) => {
   const p = (props ?? {}) as Record<string, unknown>;
   const palette = resolvePalette(paletteName);
@@ -167,7 +182,15 @@ export const Card: React.FC<CardProps> = ({
   return (
     <>
       {showCardBg && <CardBackground palette={palette} bg_style={bg_style as BgStyle | undefined} />}
-      {body}
+      <SceneFrame
+        palette={palette}
+        style_pack={style_pack}
+        scene_idx={scene_idx}
+        total_scenes={total_scenes}
+        section_label={section_label}
+      >
+        {body}
+      </SceneFrame>
     </>
   );
 };

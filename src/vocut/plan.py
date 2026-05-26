@@ -243,6 +243,39 @@ TEXT_MOTION_AFFINITY = TEXT_MOTION_AFFINITY_EDITORIAL
 ACCENT_FX_AFFINITY = ACCENT_FX_AFFINITY_EDITORIAL
 
 
+def _stamp_scene_metadata(plan_items: list[dict[str, Any]]) -> None:
+    """Write scene_idx / total_scenes / section_label / style_pack onto each
+    motion-graphic (and hybrid-overlay) target. SceneFrame in the Remotion
+    side reads these to render the supervisory text + framing decorations.
+
+    Mutates plan_items in place.
+    """
+    total = len(plan_items)
+    style_pack = os.environ.get("VOCUT_STYLE_PACK", DEFAULT_STYLE_PACK)
+    current_section: str | None = None
+    for i, item in enumerate(plan_items):
+        # Track current section by either preceding_headers or item.section.
+        headers = item.get("preceding_headers") or []
+        if headers:
+            current_section = headers[-1].get("title")
+        elif item.get("section"):
+            current_section = item["section"].get("title")
+
+        match = item.get("match", {})
+        kind = match.get("type")
+        if kind == "motion_graphic":
+            target = match
+        elif kind == "hybrid" and isinstance(match.get("overlay"), dict):
+            target = match["overlay"]
+        else:
+            continue
+        target["scene_idx"] = i
+        target["total_scenes"] = total
+        if current_section:
+            target["section_label"] = current_section
+        target["style_pack"] = style_pack
+
+
 def _insert_section_title_cards(
     plan_items: list[dict[str, Any]],
     *,
@@ -1090,6 +1123,12 @@ def plan(
 
     # Auto-assign palette + bg_style on every motion-graphic / hybrid scene.
     style_stats = _assign_motion_styles(plan_items, seed_source=str(script_path.resolve()))
+
+    # Stamp scene_idx / total_scenes / section_label / style_pack on each
+    # motion-graphic target so SceneFrame can render the "01 / 16 — SECTION"
+    # monitor text. This must run AFTER title-card insertion (so indices line
+    # up with the rendered scene list).
+    _stamp_scene_metadata(plan_items)
 
     plan_doc = {
         "meta": {
