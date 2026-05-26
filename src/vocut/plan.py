@@ -85,26 +85,34 @@ def pick_lottie_id(
     sentence: str,
     seed: int = 0,
     tag: str | None = None,
+    pack: str | None = None,
 ) -> str:
     """Pick a Lottie animation id from the manifest. Deterministic — same
     inputs always return the same id.
 
     Strategy:
-      1. If `tag` is provided, narrow to animations carrying that tag (LLM
-         supplies it via `lottie_tag`).
-      2. Within the candidate set, rotate by seed so adjacent lottie scenes
-         pick different animations even when they share a tag.
-      3. Fall back to the full pool (then to "ripple") if nothing matches.
+      1. Filter by `pack` first (an animation enters consideration when its
+         packs list includes the active pack — entries without a packs field
+         are treated as universal).
+      2. If `tag` is provided, narrow further to animations carrying that tag.
+      3. Rotate by seed within the candidate set so adjacent scenes vary.
+      4. Fall back to the full pool (then to "ripple") if nothing matches.
     """
     manifest = get_lottie_manifest()
     anims = manifest.get("animations", [])
     if not anims:
-        return "ripple"  # safe default present in the vendored set
+        return "ripple"
 
-    candidates = anims
+    pack_name = pack or os.environ.get("VOCUT_STYLE_PACK", DEFAULT_STYLE_PACK)
+
+    def in_pack(a: dict) -> bool:
+        packs = a.get("packs")
+        return packs is None or pack_name in packs
+
+    candidates = [a for a in anims if in_pack(a)] or list(anims)
     if tag:
         t = tag.lower().strip()
-        tagged = [a for a in anims if t in [x.lower() for x in a.get("tags", [])]]
+        tagged = [a for a in candidates if t in [x.lower() for x in a.get("tags", [])]]
         if tagged:
             candidates = tagged
 
@@ -129,13 +137,23 @@ MOTION_GRAPHIC_COMPONENTS = {
 # carries a "primary" palette ~60% of the time so it doesn't feel like a slot
 # machine. The remaining scenes rotate through the other 7 palettes.
 
-PALETTE_NAMES = [
+# ─── Style packs ─────────────────────────────────────────────────────────────
+# vocut serves two distinct audiences with their own visual languages:
+#   - "editorial"  knowledge / commentary creators: restrained, serif, dark.
+#   - "anime"      B站 二次元杂谈 creators: kawaii, neon, particle-heavy.
+# Each pack ships its own palette roster + per-component affinity tables.
+# VOCUT_STYLE_PACK=anime switches the active pack at runtime.
+
+PALETTE_NAMES_EDITORIAL = [
     "editorial_dark", "cobalt_data", "warm_paper", "gold_on_black",
     "minimal_light", "deep_purple", "verdant", "ink_red",
 ]
+PALETTE_NAMES_ANIME = [
+    "sakura", "neon_purple", "mikan", "anime_noir",
+    "matcha", "navy_white", "rose_gold", "dreamy_pastel",
+]
 
-# Which bg styles look right for each component. First entry is preferred.
-BG_AFFINITY: dict[str, list[str]] = {
+BG_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "title_card":        ["gradient", "solid"],
     "key_number":        ["shader", "particles"],
     "pull_quote":        ["particles", "shader"],
@@ -143,28 +161,86 @@ BG_AFFINITY: dict[str, list[str]] = {
     "list_item":         ["gradient", "solid"],
     "keyword_highlight": ["particles", "shader"],
 }
+BG_AFFINITY_ANIME: dict[str, list[str]] = {
+    # Anime mode swaps in sakura (花瓣) and danmaku (弹幕) bg styles for the
+    # particle-y slots; shader still appears for vaporwave / dramatic key moments.
+    "title_card":        ["sakura", "gradient"],
+    "key_number":        ["shader", "sakura"],
+    "pull_quote":        ["sakura", "danmaku"],
+    "comparison_panel":  ["gradient", "danmaku"],
+    "list_item":         ["sakura", "gradient"],
+    "keyword_highlight": ["danmaku", "sakura"],
+}
 
-# Per-component preference for entry motion of the primary text.
-TEXT_MOTION_AFFINITY: dict[str, list[str]] = {
+TEXT_MOTION_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "title_card":        ["scale_in", "fade"],
     "key_number":        ["scale_in", "wave"],
     "pull_quote":        ["typewriter", "fade"],
     "comparison_panel":  ["fade", "scale_in"],
     "list_item":         ["wave", "fade"],
-    "keyword_highlight": ["fade", "scale_in"],  # char-modes lose partial highlight
-    "lottie":            ["fade", "scale_in"],  # caption over animation
+    "keyword_highlight": ["fade", "scale_in"],
+    "lottie":            ["fade", "scale_in"],
+}
+TEXT_MOTION_AFFINITY_ANIME: dict[str, list[str]] = {
+    # Anime mode prefers bouncy + per-char motion (more energy).
+    "title_card":        ["scale_in", "wave"],
+    "key_number":        ["scale_in", "wave"],
+    "pull_quote":        ["typewriter", "wave"],
+    "comparison_panel":  ["wave", "scale_in"],
+    "list_item":         ["wave", "scale_in"],
+    "keyword_highlight": ["typewriter", "wave"],
+    "lottie":            ["scale_in", "fade"],
 }
 
-# Per-component preference for accent decoration.
-ACCENT_FX_AFFINITY: dict[str, list[str]] = {
+ACCENT_FX_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "title_card":        ["underline_sweep", "none"],
     "key_number":        ["glow", "burst"],
-    "pull_quote":        ["none", "glow"],          # quote mark + italics already
+    "pull_quote":        ["none", "glow"],
     "comparison_panel":  ["none", "underline_sweep"],
     "list_item":         ["none", "underline_sweep"],
     "keyword_highlight": ["underline_sweep", "glow"],
-    "lottie":            ["none", "underline_sweep"], # animation carries energy
+    "lottie":            ["none", "underline_sweep"],
 }
+ACCENT_FX_AFFINITY_ANIME: dict[str, list[str]] = {
+    # Anime mode leans hard on glow + burst (manga emphasis).
+    "title_card":        ["glow", "burst"],
+    "key_number":        ["burst", "glow"],
+    "pull_quote":        ["glow", "underline_sweep"],
+    "comparison_panel":  ["burst", "glow"],
+    "list_item":         ["underline_sweep", "glow"],
+    "keyword_highlight": ["burst", "glow"],
+    "lottie":            ["glow", "burst"],
+}
+
+STYLE_PACKS: dict[str, dict[str, Any]] = {
+    "editorial": {
+        "palette_names": PALETTE_NAMES_EDITORIAL,
+        "bg_affinity": BG_AFFINITY_EDITORIAL,
+        "text_motion_affinity": TEXT_MOTION_AFFINITY_EDITORIAL,
+        "accent_fx_affinity": ACCENT_FX_AFFINITY_EDITORIAL,
+    },
+    "anime": {
+        "palette_names": PALETTE_NAMES_ANIME,
+        "bg_affinity": BG_AFFINITY_ANIME,
+        "text_motion_affinity": TEXT_MOTION_AFFINITY_ANIME,
+        "accent_fx_affinity": ACCENT_FX_AFFINITY_ANIME,
+    },
+}
+
+DEFAULT_STYLE_PACK = "editorial"
+
+
+def _resolve_style_pack() -> dict[str, Any]:
+    name = os.environ.get("VOCUT_STYLE_PACK", DEFAULT_STYLE_PACK)
+    return STYLE_PACKS.get(name, STYLE_PACKS[DEFAULT_STYLE_PACK])
+
+
+# Back-compat: legacy code paths read PALETTE_NAMES / BG_AFFINITY / etc directly.
+# Keep those names pointing at the editorial pack so existing imports work.
+PALETTE_NAMES = PALETTE_NAMES_EDITORIAL
+BG_AFFINITY = BG_AFFINITY_EDITORIAL
+TEXT_MOTION_AFFINITY = TEXT_MOTION_AFFINITY_EDITORIAL
+ACCENT_FX_AFFINITY = ACCENT_FX_AFFINITY_EDITORIAL
 
 
 def _insert_section_title_cards(
@@ -228,9 +304,15 @@ def _assign_motion_styles(
     """
     import hashlib
 
+    pack = _resolve_style_pack()
+    palette_names: list[str] = pack["palette_names"]
+    bg_affinity: dict[str, list[str]] = pack["bg_affinity"]
+    text_motion_affinity: dict[str, list[str]] = pack["text_motion_affinity"]
+    accent_fx_affinity: dict[str, list[str]] = pack["accent_fx_affinity"]
+
     h = int(hashlib.sha256(seed_source.encode("utf-8")).hexdigest(), 16)
-    primary = PALETTE_NAMES[h % len(PALETTE_NAMES)]
-    accents = [p for p in PALETTE_NAMES if p != primary]
+    primary = palette_names[h % len(palette_names)]
+    accents = [p for p in palette_names if p != primary]
 
     prev_palette: str | None = None
     prev_bg: str | None = None
@@ -302,7 +384,7 @@ def _assign_motion_styles(
             chosen_bg = target["bg_style"]
         else:
             chosen_bg = _pick_affinity(
-                BG_AFFINITY.get(component, ["solid", "gradient", "particles", "shader"]),
+                bg_affinity.get(component, ["solid", "gradient", "particles", "shader"]),
                 prev_bg, seed,
             )
 
@@ -310,7 +392,7 @@ def _assign_motion_styles(
             chosen_motion = target["text_motion"]
         else:
             chosen_motion = _pick_affinity(
-                TEXT_MOTION_AFFINITY.get(component, ["fade", "scale_in", "wave", "typewriter"]),
+                text_motion_affinity.get(component, ["fade", "scale_in", "wave", "typewriter"]),
                 prev_motion, seed + 7,
             )
 
@@ -318,7 +400,7 @@ def _assign_motion_styles(
             chosen_fx = target["accent_fx"]
         else:
             chosen_fx = _pick_affinity(
-                ACCENT_FX_AFFINITY.get(component, ["none", "glow", "burst", "underline_sweep"]),
+                accent_fx_affinity.get(component, ["none", "glow", "burst", "underline_sweep"]),
                 prev_fx, seed + 13,
             )
 
@@ -349,6 +431,7 @@ def _assign_motion_styles(
 
     diversity = round(len(tuples) / motion_count, 3) if motion_count else 0.0
     return {
+        "style_pack": os.environ.get("VOCUT_STYLE_PACK", DEFAULT_STYLE_PACK),
         "primary_palette": primary,
         "motion_scenes": motion_count,
         "primary_usage": primary_count,

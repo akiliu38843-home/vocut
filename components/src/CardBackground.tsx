@@ -21,7 +21,13 @@ import { ThreeCanvas } from "@remotion/three";
 import { Color } from "three";
 import type { Palette } from "./theme";
 
-export type BgStyle = "solid" | "gradient" | "particles" | "shader";
+export type BgStyle =
+  | "solid"
+  | "gradient"
+  | "particles"
+  | "shader"
+  | "sakura"   // anime pack: 樱花飘落
+  | "danmaku"; // anime pack: 弹幕流过
 
 interface BgProps {
   palette: Palette;
@@ -189,6 +195,97 @@ const ShaderBg: React.FC<BgProps> = ({ palette }) => {
   );
 };
 
+// ─── sakura petals (anime) ─────────────────────────────────────────────────
+const SAKURA_COUNT = 40;
+const SakuraBg: React.FC<BgProps> = ({ palette }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const petals = Array.from({ length: SAKURA_COUNT }, (_, i) => {
+    const baseX = prng(i, 1) * 110 - 5; // -5%-105% so they enter / exit the frame
+    const fallSpeed = 4 + prng(i, 2) * 6; // % per second
+    const driftAmp = 6 + prng(i, 3) * 10;
+    const driftFreq = 0.3 + prng(i, 4) * 0.5;
+    const startY = prng(i, 5) * 100;
+    const t = frame / fps;
+    const y = (startY + t * fallSpeed) % 120 - 10; // wrap, with offscreen margin
+    const x = baseX + Math.sin(t * driftFreq + i) * driftAmp;
+    const rot = (t * (40 + prng(i, 6) * 60) + i * 17) % 360;
+    const size = 8 + prng(i, 7) * 14;
+    const opacity = 0.55 + prng(i, 8) * 0.35;
+    return { i, x, y, rot, size, opacity };
+  });
+  return (
+    <AbsoluteFill style={{ background: palette.bg, overflow: "hidden" }}>
+      {petals.map((p) => (
+        <div
+          key={p.i}
+          style={{
+            position: "absolute",
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: p.size,
+            height: p.size,
+            opacity: p.opacity,
+            transform: `rotate(${p.rot}deg)`,
+            // Petal silhouette via radial-gradient — soft falloff
+            background: `radial-gradient(ellipse 60% 100% at 50% 30%, ${palette.accent}ff 0%, ${palette.accent}88 50%, transparent 85%)`,
+            borderRadius: "50% 0 50% 50%",
+            filter: "blur(0.5px)",
+          }}
+        />
+      ))}
+    </AbsoluteFill>
+  );
+};
+
+// ─── danmaku bullets (anime) ───────────────────────────────────────────────
+const DANMAKU_LINES = [
+  "23333", "awsl", "yyds", "下次一定", "前方高能", "草（中日双语）",
+  "我哭了", "DNA 动了", "ojbk", "好家伙", "破防了", "栓Q",
+  "啊这", "笑死", "蚌埠住了", "梦回", "爷青回", "高情商版",
+];
+const DANMAKU_COUNT = 12;
+const DanmakuBg: React.FC<BgProps> = ({ palette }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const bullets = Array.from({ length: DANMAKU_COUNT }, (_, i) => {
+    const lane = (i % 8) * 12 + 6; // 8 lanes evenly distributed
+    const speed = 12 + prng(i, 1) * 12; // % per second
+    const phase = prng(i, 2) * 100;
+    const t = frame / fps;
+    // Travel from right (110%) to left (-20%), wrap.
+    const x = ((110 - (t * speed + phase)) % 130 + 130) % 130 - 20;
+    const text = DANMAKU_LINES[i % DANMAKU_LINES.length];
+    const fontSize = 20 + Math.floor(prng(i, 3) * 14);
+    const opacity = 0.5 + prng(i, 4) * 0.35;
+    return { i, x, y: lane, text, fontSize, opacity };
+  });
+  return (
+    <AbsoluteFill style={{ background: palette.bg, overflow: "hidden" }}>
+      {bullets.map((b) => (
+        <div
+          key={b.i}
+          style={{
+            position: "absolute",
+            left: `${b.x}%`,
+            top: `${b.y}%`,
+            fontSize: b.fontSize,
+            color: palette.text,
+            opacity: b.opacity,
+            fontFamily: "'PingFang SC', sans-serif",
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            textShadow: `0 1px 2px ${palette.bg}, 0 0 8px ${palette.bg}`,
+            pointerEvents: "none",
+          }}
+        >
+          {b.text}
+        </div>
+      ))}
+    </AbsoluteFill>
+  );
+};
+
 // ─── dispatcher ────────────────────────────────────────────────────────────
 export const CardBackground: React.FC<BgProps> = ({ palette, bg_style }) => {
   switch (bg_style) {
@@ -198,6 +295,10 @@ export const CardBackground: React.FC<BgProps> = ({ palette, bg_style }) => {
       return <ParticlesBg palette={palette} />;
     case "shader":
       return <ShaderBg palette={palette} />;
+    case "sakura":
+      return <SakuraBg palette={palette} />;
+    case "danmaku":
+      return <DanmakuBg palette={palette} />;
     case "solid":
     default:
       return <SolidBg palette={palette} />;

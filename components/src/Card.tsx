@@ -45,7 +45,7 @@ export const cardSchema = z.object({
   /** Which color palette to use. Default: "editorial_dark". */
   palette: z.string().optional(),
   /** Background visual style. Default: "solid". */
-  bg_style: z.enum(["solid", "gradient", "particles", "shader"]).optional(),
+  bg_style: z.enum(["solid", "gradient", "particles", "shader", "sakura", "danmaku"]).optional(),
   /** How content text enters. Default: component-specific. */
   text_motion: z.enum(["fade", "typewriter", "wave", "scale_in"]).optional(),
   /** Decoration accent. Default: "none". */

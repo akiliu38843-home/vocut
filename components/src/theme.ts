@@ -17,6 +17,7 @@ export interface Palette {
 }
 
 export type PaletteName =
+  // ─── editorial pack ────────────────────────────────────────────────────
   | "editorial_dark"      // default — Claude-design black + amber
   | "cobalt_data"         // cool blue, "data" feel
   | "warm_paper"          // archive / book / quote
@@ -24,7 +25,16 @@ export type PaletteName =
   | "minimal_light"       // editorial light mode
   | "deep_purple"         // night sky, tech
   | "verdant"             // green oasis, nature / wellness
-  | "ink_red";            // bold magazine red
+  | "ink_red"             // bold magazine red
+  // ─── anime pack ───────────────────────────────────────────────────────
+  | "sakura"              // 樱粉
+  | "neon_purple"         // 霓虹紫 / vaporwave
+  | "mikan"               // 蜜柑橙
+  | "anime_noir"          // 黑金 / 成熟二次元
+  | "matcha"              // 抹茶绿
+  | "navy_white"          // 海军白蓝
+  | "rose_gold"           // 玫瑰金
+  | "dreamy_pastel";      // 梦境粉紫
 
 export const PALETTES: Record<PaletteName, Palette> = {
   editorial_dark: {
@@ -90,6 +100,72 @@ export const PALETTES: Record<PaletteName, Palette> = {
     textSecondary: "#d4a4a4",
     accent: "#dc2626",
     quiet: "#5a3434",
+  },
+
+  // ─── anime pack ─────────────────────────────────────────────────────────
+  sakura: {
+    bg: "#2d1a26",
+    surface: "#3f2433",
+    text: "#fdf2f5",
+    textSecondary: "#e8b5c8",
+    accent: "#f472b6",
+    quiet: "#6b4754",
+  },
+  neon_purple: {
+    bg: "#0c0a1f",
+    surface: "#1a163d",
+    text: "#f0e6ff",
+    textSecondary: "#a78bfa",
+    accent: "#ff4dff",
+    quiet: "#3e3463",
+  },
+  mikan: {
+    bg: "#2a1810",
+    surface: "#3d2418",
+    text: "#fff5e8",
+    textSecondary: "#fbbf24",
+    accent: "#fb923c",
+    quiet: "#5f3f28",
+  },
+  anime_noir: {
+    bg: "#0a0a0a",
+    surface: "#1a1a18",
+    text: "#f5e8c8",
+    textSecondary: "#c4ab6e",
+    accent: "#fbbf24",
+    quiet: "#4d4533",
+  },
+  matcha: {
+    bg: "#1a2a1e",
+    surface: "#2a3d2e",
+    text: "#f0fdf4",
+    textSecondary: "#86efac",
+    accent: "#a3e635",
+    quiet: "#4a6353",
+  },
+  navy_white: {
+    bg: "#1e2a3d",
+    surface: "#2a3b54",
+    text: "#f1f5f9",
+    textSecondary: "#94a3b8",
+    accent: "#38bdf8",
+    quiet: "#475569",
+  },
+  rose_gold: {
+    bg: "#2a1a1e",
+    surface: "#3d2630",
+    text: "#fdf2f8",
+    textSecondary: "#fb7185",
+    accent: "#fda4af",
+    quiet: "#5f3c4a",
+  },
+  dreamy_pastel: {
+    bg: "#1f1a3d",
+    surface: "#2a2354",
+    text: "#f0e7ff",
+    textSecondary: "#c4b5fd",
+    accent: "#fbcfe8",
+    quiet: "#50467a",
   },
 };
 

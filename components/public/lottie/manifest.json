@@ -1,48 +1,54 @@
 {
-  "version": 1,
+  "version": 2,
   "license": "MIT (vendored from airbnb/lottie-web test fixtures)",
-  "note": "Starter long-tail pool. The Airbnb test animations are illustrative and loud by design — production users should curate their own subset from LottieFiles or commissioned designs.",
+  "note": "Starter long-tail pool. Each animation lists which style packs it suits — editorial knowledge content, anime/二次元 commentary, or both. Production users should curate their own subset.",
   "animations": [
     {
       "id": "adrock",
       "file": "adrock.json",
+      "packs": ["anime"],
       "tags": ["character", "portrait", "playful"],
-      "description": "Stylized portrait character",
+      "description": "Stylized cartoon portrait — feels at home in anime/二次元 commentary",
       "suited_for": ["pull_quote", "title_card"]
     },
     {
       "id": "banner",
       "file": "banner.json",
+      "packs": ["editorial", "anime"],
       "tags": ["banner", "header", "balloon", "celebration"],
-      "description": "CodePen-style banner with balloon, 24s loop",
+      "description": "Banner with balloon, 24s loop — generic celebration",
       "suited_for": ["title_card", "eyebrow"]
     },
     {
       "id": "dalek",
       "file": "dalek.json",
+      "packs": ["anime"],
       "tags": ["character", "scifi", "playful"],
-      "description": "Sci-fi character animation",
+      "description": "Sci-fi character — chibi-flavored, anime-friendly",
       "suited_for": ["pull_quote"]
     },
     {
       "id": "lights",
       "file": "lights.json",
+      "packs": ["editorial", "anime"],
       "tags": ["lights", "festive", "particles", "celebration"],
-      "description": "Christmas / festival lights, looping",
+      "description": "Festival lights — works for both editorial wonder and anime vibes",
       "suited_for": ["title_card", "pull_quote", "background"]
     },
     {
       "id": "ripple",
       "file": "ripple.json",
+      "packs": ["editorial"],
       "tags": ["abstract", "data", "wave", "ripple", "minimal"],
-      "description": "Ripple graph — clean abstract motion, good for data scenes",
+      "description": "Ripple graph — clean abstract motion, ideal for data scenes",
       "suited_for": ["key_number", "pull_quote", "background"]
     },
     {
       "id": "starfish",
       "file": "starfish.json",
+      "packs": ["editorial", "anime"],
       "tags": ["nature", "organic", "minimal", "abstract"],
-      "description": "Starfish — organic spreading motion",
+      "description": "Starfish — organic spreading motion, works either side",
       "suited_for": ["pull_quote", "background"]
     }
   ]
