@@ -1,15 +1,24 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface TitleCardProps {
   title: string;
   subtitle?: string;
   /** Optional eyebrow line above the title (e.g. "Chapter 03"). */
   eyebrow?: string;
+  /** Palette resolved by Card.tsx. Falls back to editorial_dark. */
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
-export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }) => {
+export const TitleCard: React.FC<TitleCardProps> = ({
+  title,
+  subtitle,
+  eyebrow,
+  palette = PALETTES.editorial_dark,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -21,14 +30,13 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }
     extrapolateRight: "clamp",
   });
 
-  // Subtle rule line that draws in left-to-right
   const ruleProgress = interpolate(frame, [fadeFrames * 0.5, fps * 1.4], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   return (
-    <AbsoluteFill style={{ background: COLORS.bg.titleCard }}>
+    <AbsoluteFill>
       <div
         style={{
           display: "flex",
@@ -49,7 +57,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }
               fontSize: 22,
               letterSpacing: 6,
               textTransform: "uppercase",
-              color: COLORS.text.secondary,
+              color: palette.textSecondary,
               marginBottom: 28,
             }}
           >
@@ -62,7 +70,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }
             fontFamily: FONTS.display,
             fontWeight: 400,
             fontSize: "clamp(48px, 7vw, 116px)",
-            color: COLORS.text.primary,
+            color: palette.text,
             textAlign: "center",
             lineHeight: 1.1,
           }}
@@ -74,7 +82,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }
             marginTop: 28,
             width: `${ruleProgress * 18}%`,
             height: 1,
-            background: COLORS.text.secondary,
+            background: palette.textSecondary,
             transformOrigin: "left",
           }}
         />
@@ -84,7 +92,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({ title, subtitle, eyebrow }
               marginTop: 28,
               fontFamily: FONTS.body,
               fontSize: 26,
-              color: COLORS.text.secondary,
+              color: palette.textSecondary,
               textAlign: "center",
               maxWidth: "70%",
             }}

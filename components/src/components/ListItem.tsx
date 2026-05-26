@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface ListItemProps {
   items: string[];
@@ -8,16 +8,24 @@ export interface ListItemProps {
   label?: string;
   /** Numbering style: "decimal" (1.) or "none". */
   style?: "decimal" | "none";
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
-export const ListItem: React.FC<ListItemProps> = ({ items, label, style = "decimal" }) => {
+export const ListItem: React.FC<ListItemProps> = ({
+  items,
+  label,
+  style = "decimal",
+  palette = PALETTES.editorial_dark,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
   const labelOpacity = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ background: COLORS.bg.listItem }}>
+    <AbsoluteFill>
       <div
         style={{
           display: "flex",
@@ -35,7 +43,7 @@ export const ListItem: React.FC<ListItemProps> = ({ items, label, style = "decim
             style={{
               fontFamily: FONTS.body,
               fontSize: 22,
-              color: COLORS.text.secondary,
+              color: palette.textSecondary,
               letterSpacing: 4,
               textTransform: "uppercase",
               marginBottom: 20,
@@ -66,7 +74,7 @@ export const ListItem: React.FC<ListItemProps> = ({ items, label, style = "decim
                 gap: 28,
                 fontFamily: FONTS.body,
                 fontSize: 44,
-                color: COLORS.text.primary,
+                color: palette.text,
                 opacity: itemOpacity,
                 transform: `translateX(${shift}px)`,
               }}
@@ -76,7 +84,7 @@ export const ListItem: React.FC<ListItemProps> = ({ items, label, style = "decim
                   style={{
                     fontFamily: FONTS.mono,
                     fontSize: 32,
-                    color: COLORS.text.accent,
+                    color: palette.accent,
                     minWidth: 48,
                   }}
                 >

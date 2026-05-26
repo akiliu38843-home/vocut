@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface KeyNumberProps {
   /** The big number, exactly as text (e.g. "4000 万", "60", "$4.2 亿"). */
@@ -11,9 +11,18 @@ export interface KeyNumberProps {
   label?: string;
   /** Optional secondary metric (e.g. "海外占 38%"). */
   secondary?: string;
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
-export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, secondary }) => {
+export const KeyNumber: React.FC<KeyNumberProps> = ({
+  primary,
+  unit,
+  label,
+  secondary,
+  palette = PALETTES.editorial_dark,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -23,7 +32,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, seco
   const labelOpacity = interpolate(frame, [fps * 0.7, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ background: COLORS.bg.keyNumber }}>
+    <AbsoluteFill>
       <div
         style={{
           display: "flex",
@@ -49,7 +58,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, seco
               fontFamily: FONTS.display,
               fontSize: "clamp(140px, 18vw, 280px)",
               fontWeight: 500,
-              color: COLORS.text.accent,
+              color: palette.accent,
               lineHeight: 1,
               letterSpacing: -2,
             }}
@@ -61,7 +70,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, seco
               style={{
                 fontFamily: FONTS.body,
                 fontSize: "clamp(40px, 5vw, 80px)",
-                color: COLORS.text.primary,
+                color: palette.text,
                 opacity: unitOpacity,
                 fontWeight: 300,
               }}
@@ -76,7 +85,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, seco
               marginTop: 32,
               fontFamily: FONTS.body,
               fontSize: 32,
-              color: COLORS.text.secondary,
+              color: palette.textSecondary,
               textAlign: "center",
               opacity: labelOpacity,
             }}
@@ -90,7 +99,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({ primary, unit, label, seco
               marginTop: 8,
               fontFamily: FONTS.mono,
               fontSize: 22,
-              color: COLORS.text.quiet,
+              color: palette.quiet,
               textAlign: "center",
               opacity: labelOpacity,
             }}

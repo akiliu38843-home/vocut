@@ -1,15 +1,22 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface KeywordHighlightProps {
   /** Full sentence — the entire thing is shown; the highlighted slice is amber. */
   text: string;
   /** Substring of `text` to emphasize. If absent, no inline highlight. */
   highlight?: string;
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
-export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({ text, highlight }) => {
+export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
+  text,
+  highlight,
+  palette = PALETTES.editorial_dark,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -33,7 +40,7 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({ text, highli
   }
 
   return (
-    <AbsoluteFill style={{ background: COLORS.bg.keywordHighlight }}>
+    <AbsoluteFill>
       <div
         style={{
           display: "flex",
@@ -44,7 +51,7 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({ text, highli
           padding: "0 10%",
           fontFamily: FONTS.body,
           fontSize: "clamp(40px, 5.5vw, 72px)",
-          color: COLORS.text.primary,
+          color: palette.text,
           lineHeight: 1.3,
           textAlign: "center",
           opacity: fadeIn,
@@ -56,7 +63,7 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({ text, highli
           {middle && (
             <span
               style={{
-                color: COLORS.text.accent,
+                color: palette.accent,
                 opacity: highlightOpacity,
               }}
             >

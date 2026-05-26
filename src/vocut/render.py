@@ -18,6 +18,7 @@ If a voiceover audio file is provided, it is overlaid on the final video
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -206,6 +207,112 @@ def render_card_segment(
 
 
 # -----------------------------------------------------------------------------
+# Remotion motion-graphic renderer (P0.3 — replaces Pillow placeholders)
+# -----------------------------------------------------------------------------
+
+
+def _components_dir_ready(p: Path) -> bool:
+    """A directory is a usable components subproject if it has node_modules,
+    the Remotion entry, and the Card composition."""
+    return (
+        (p / "node_modules").is_dir()
+        and (p / "package.json").exists()
+        and (p / "src" / "Root.tsx").exists()
+    )
+
+
+def _find_components_dir() -> Path | None:
+    """Locate the Remotion components subproject. Search order:
+      1. VOCUT_COMPONENTS_DIR env var
+      2. ./components or ./vocut/components relative to cwd
+      3. Walk up from this file (works for editable installs)
+    """
+    if env := os.environ.get("VOCUT_COMPONENTS_DIR"):
+        p = Path(env).resolve()
+        if _components_dir_ready(p):
+            return p
+
+    for c in (Path.cwd() / "components", Path.cwd() / "vocut" / "components"):
+        if _components_dir_ready(c):
+            return c.resolve()
+
+    here = Path(__file__).resolve()
+    for i in range(2, min(6, len(here.parents))):
+        c = here.parents[i] / "components"
+        if _components_dir_ready(c):
+            return c
+    return None
+
+
+def render_remotion_segment(
+    item: dict[str, Any],
+    out_mp4: Path,
+    components_dir: Path,
+    *,
+    duration_sec: float = DEFAULT_CARD_DURATION_SEC,
+    fps: int = DEFAULT_FPS,
+    width: int = DEFAULT_WIDTH,
+    height: int = DEFAULT_HEIGHT,
+) -> Path:
+    """Render a motion-graphic plan item by invoking `npx remotion render`.
+
+    Builds a Card-shape props JSON from the plan item, writes it to a temp
+    file (avoids shell-escape pain with Chinese strings), then shells out.
+    """
+    match = item.get("match", {})
+    component = match.get("component", "keyword_highlight")
+    raw_props = dict(match.get("props") or {})
+    total_frames = max(1, int(round(duration_sec * fps)))
+
+    # palette / bg_style / text_motion / accent_fx can live at match level
+    # (canonical) or be tucked into match.props (LLM convenience). Strip
+    # them out of props either way so they reach Card's top-level args.
+    def _take(key: str) -> Any:
+        return match.get(key) or raw_props.pop(key, None)
+
+    card_props: dict[str, Any] = {
+        "component": component,
+        "props": raw_props,
+        "sentence": item.get("sentence", ""),
+        "durationInFrames": total_frames,
+    }
+    for k in ("palette", "bg_style", "text_motion", "accent_fx"):
+        v = _take(k)
+        if v is not None:
+            card_props[k] = v
+
+    out_mp4.parent.mkdir(parents=True, exist_ok=True)
+    props_json = out_mp4.with_suffix(".props.json")
+    props_json.write_text(json.dumps(card_props, ensure_ascii=False))
+
+    cmd = [
+        "npx", "--no-install", "remotion", "render",
+        "src/index.ts", "Card",
+        str(out_mp4.resolve()),
+        f"--props={props_json.resolve()}",
+        "--scale=1",
+        "--codec=h264",
+        "--concurrency=1",
+        f"--width={width}",
+        f"--height={height}",
+        "--log=error",
+    ]
+    try:
+        subprocess.run(
+            cmd, check=True, capture_output=True, cwd=str(components_dir)
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"remotion render failed (exit {e.returncode}):\n"
+            f"  cmd: {' '.join(cmd[:8])} …\n"
+            f"  stderr: {e.stderr.decode('utf-8', errors='replace')[-500:]}"
+        ) from e
+    finally:
+        props_json.unlink(missing_ok=True)
+    return out_mp4
+
+
+# -----------------------------------------------------------------------------
 # Footage segment renderer
 # -----------------------------------------------------------------------------
 
@@ -336,6 +443,10 @@ def render(
     segments: list[Path] = []
     failed: list[dict[str, Any]] = []
 
+    use_remotion = os.environ.get("VOCUT_NO_REMOTION") != "1"
+    components_dir = _find_components_dir() if use_remotion else None
+    motion_backend = "remotion" if components_dir else "pillow"
+
     try:
         for i, item in enumerate(items, 1):
             seg_path = work_dir / f"seg_{i:04d}.mp4"
@@ -351,15 +462,36 @@ def render(
                     # P0.4: render footage only; overlay deferred to Remotion (P0.3/P0.4.1).
                     render_footage_segment(item["match"]["primary"], seg_path, fps, width, height)
                 else:
-                    render_card_segment(
-                        item["sentence"],
-                        item["match"].get("component", "keyword_highlight"),
-                        seg_path,
-                        duration_sec=card_duration_sec,
-                        fps=fps,
-                        width=width,
-                        height=height,
-                    )
+                    seg_dur = float(item.get("duration_estimate_sec") or card_duration_sec)
+                    if components_dir is not None:
+                        try:
+                            render_remotion_segment(
+                                item, seg_path, components_dir,
+                                duration_sec=seg_dur, fps=fps,
+                                width=width, height=height,
+                            )
+                        except Exception as e:
+                            # Soft fallback to Pillow so one bad component
+                            # doesn't kill the whole render.
+                            print(
+                                f"  [segment {i}] remotion failed, falling back to pillow: {e}",
+                                file=sys.stderr,
+                            )
+                            render_card_segment(
+                                item["sentence"],
+                                item["match"].get("component", "keyword_highlight"),
+                                seg_path,
+                                duration_sec=seg_dur,
+                                fps=fps, width=width, height=height,
+                            )
+                    else:
+                        render_card_segment(
+                            item["sentence"],
+                            item["match"].get("component", "keyword_highlight"),
+                            seg_path,
+                            duration_sec=seg_dur,
+                            fps=fps, width=width, height=height,
+                        )
                 segments.append(seg_path)
             except Exception as e:
                 failed.append({"sentence_idx": item.get("sentence_idx"), "error": str(e)})
@@ -392,4 +524,6 @@ def render(
         "with_voiceover": voiceover is not None,
         "frame_size": f"{width}x{height}",
         "fps": fps,
+        "motion_backend": motion_backend,
+        "components_dir": str(components_dir) if components_dir else None,
     }

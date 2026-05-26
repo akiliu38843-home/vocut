@@ -1,13 +1,20 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface PullQuoteProps {
   quote: string;
   attribution?: string;
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
-export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
+export const PullQuote: React.FC<PullQuoteProps> = ({
+  quote,
+  attribution,
+  palette = PALETTES.editorial_dark,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -16,7 +23,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
   const attrOpacity = interpolate(frame, [fps * 0.6, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill style={{ background: COLORS.bg.pullQuote }}>
+    <AbsoluteFill>
       <div
         style={{
           display: "flex",
@@ -28,7 +35,6 @@ export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
           padding: "0 12%",
         }}
       >
-        {/* Oversized opening quote mark, sits behind the text */}
         <div
           style={{
             position: "absolute",
@@ -36,7 +42,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
             left: "10%",
             fontFamily: FONTS.display,
             fontSize: 280,
-            color: COLORS.text.accent,
+            color: palette.accent,
             opacity: 0.18,
             lineHeight: 1,
             fontStyle: "italic",
@@ -50,7 +56,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
             fontFamily: FONTS.display,
             fontStyle: "italic",
             fontSize: "clamp(40px, 5vw, 78px)",
-            color: COLORS.text.primary,
+            color: palette.text,
             textAlign: "center",
             lineHeight: 1.35,
             opacity: quoteOpacity,
@@ -65,7 +71,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({ quote, attribution }) => {
               marginTop: 40,
               fontFamily: FONTS.body,
               fontSize: 26,
-              color: COLORS.text.secondary,
+              color: palette.textSecondary,
               letterSpacing: 1,
               opacity: attrOpacity,
             }}

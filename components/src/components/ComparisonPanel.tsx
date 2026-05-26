@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { COLORS, FONTS } from "../theme";
+import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface ComparisonItem {
   label?: string;
@@ -13,16 +13,15 @@ export interface ComparisonPanelProps {
   title?: string;
   /** Two-way comparison default; three-way also supported. */
   items: ComparisonItem[];
-  /** Custom backgrounds. Falls back to theme defaults. */
-  leftBg?: string;
-  rightBg?: string;
+  palette?: Palette;
+  text_motion?: string;
+  accent_fx?: string;
 }
 
 export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
   title,
   items,
-  leftBg,
-  rightBg,
+  palette = PALETTES.editorial_dark,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -33,15 +32,13 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
     extrapolateRight: "clamp",
   });
 
-  const itemBackgrounds =
-    items.length === 2
-      ? [leftBg || COLORS.bg.comparisonLeft, rightBg || COLORS.bg.comparisonRight]
-      : items.map((_, i) =>
-          i % 2 === 0 ? COLORS.bg.comparisonLeft : COLORS.bg.comparisonRight,
-        );
+  // Alternate surface tones for adjacent panels (subtle separation).
+  const surfaces = items.map((_, i) =>
+    i % 2 === 0 ? palette.bg : palette.surface,
+  );
 
   return (
-    <AbsoluteFill style={{ background: "#000" }}>
+    <AbsoluteFill>
       {title && (
         <div
           style={{
@@ -52,7 +49,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
             textAlign: "center",
             fontFamily: FONTS.body,
             fontSize: 28,
-            color: COLORS.text.secondary,
+            color: palette.textSecondary,
             letterSpacing: 4,
             textTransform: "uppercase",
             opacity: panelOpacity,
@@ -76,7 +73,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
               key={i}
               style={{
                 flex: 1,
-                background: itemBackgrounds[i],
+                background: surfaces[i],
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -85,7 +82,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                 opacity: itemOpacity,
                 borderRight:
                   i < items.length - 1
-                    ? `1px solid ${COLORS.text.quiet}`
+                    ? `1px solid ${palette.quiet}`
                     : undefined,
               }}
             >
@@ -94,7 +91,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                   style={{
                     fontFamily: FONTS.body,
                     fontSize: 22,
-                    color: COLORS.text.secondary,
+                    color: palette.textSecondary,
                     letterSpacing: 3,
                     textTransform: "uppercase",
                     marginBottom: 28,
@@ -107,7 +104,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                 style={{
                   fontFamily: FONTS.display,
                   fontSize: "clamp(48px, 6vw, 84px)",
-                  color: COLORS.text.primary,
+                  color: palette.text,
                   fontWeight: 400,
                   textAlign: "center",
                   lineHeight: 1.15,
@@ -121,7 +118,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                     marginTop: 24,
                     fontFamily: FONTS.mono,
                     fontSize: 22,
-                    color: COLORS.text.accent,
+                    color: palette.accent,
                   }}
                 >
                   {it.tag}
@@ -131,7 +128,6 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
           );
         })}
       </div>
-      {/* Center axis rule, draws downward */}
       {items.length === 2 && (
         <div
           style={{
@@ -140,7 +136,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
             top: "20%",
             height: `${ruleProgress * 60}%`,
             width: 1,
-            background: COLORS.text.quiet,
+            background: palette.quiet,
             transform: "translateX(-0.5px)",
           }}
         />
