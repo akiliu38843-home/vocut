@@ -76,6 +76,26 @@ BG_AFFINITY: dict[str, list[str]] = {
     "keyword_highlight": ["particles", "shader"],
 }
 
+# Per-component preference for entry motion of the primary text.
+TEXT_MOTION_AFFINITY: dict[str, list[str]] = {
+    "title_card":        ["scale_in", "fade"],
+    "key_number":        ["scale_in", "wave"],
+    "pull_quote":        ["typewriter", "fade"],
+    "comparison_panel":  ["fade", "scale_in"],
+    "list_item":         ["wave", "fade"],
+    "keyword_highlight": ["fade", "scale_in"],  # char-modes lose partial highlight
+}
+
+# Per-component preference for accent decoration.
+ACCENT_FX_AFFINITY: dict[str, list[str]] = {
+    "title_card":        ["underline_sweep", "none"],
+    "key_number":        ["glow", "burst"],
+    "pull_quote":        ["none", "glow"],          # quote mark + italics already
+    "comparison_panel":  ["none", "underline_sweep"],
+    "list_item":         ["none", "underline_sweep"],
+    "keyword_highlight": ["underline_sweep", "glow"],
+}
+
 
 def _assign_motion_styles(
     plan_items: list[dict[str, Any]],
@@ -101,9 +121,20 @@ def _assign_motion_styles(
 
     prev_palette: str | None = None
     prev_bg: str | None = None
+    prev_motion: str | None = None
+    prev_fx: str | None = None
     primary_count = 0
     motion_count = 0
     accent_idx = h % len(accents)  # rotate starting index
+
+    def _pick_affinity(
+        candidates: list[str],
+        prev: str | None,
+        component_seed: int,
+    ) -> str:
+        """Affinity-first, anti-adjacent, with a deterministic rotation tiebreak."""
+        rotated = candidates[component_seed % len(candidates):] + candidates[: component_seed % len(candidates)]
+        return next((c for c in rotated if c != prev), rotated[0])
 
     for i, item in enumerate(plan_items):
         match = item.get("match", {})
@@ -136,20 +167,46 @@ def _assign_motion_styles(
                 chosen_palette = accents[accent_idx % len(accents)]
                 accent_idx += 1
 
-        # bg_style: respect existing; otherwise affinity-first, anti-adjacent.
+        # bg_style / text_motion / accent_fx: respect existing; otherwise pick
+        # via per-component affinity, rotated by a deterministic seed so
+        # different scenes pull different affinity entries.
+        seed = (h + motion_count * 31) % 7919
+
         if target.get("bg_style"):
             chosen_bg = target["bg_style"]
         else:
-            candidates = BG_AFFINITY.get(component, ["solid", "gradient", "particles", "shader"])
-            chosen_bg = next((b for b in candidates if b != prev_bg), candidates[0])
+            chosen_bg = _pick_affinity(
+                BG_AFFINITY.get(component, ["solid", "gradient", "particles", "shader"]),
+                prev_bg, seed,
+            )
+
+        if target.get("text_motion"):
+            chosen_motion = target["text_motion"]
+        else:
+            chosen_motion = _pick_affinity(
+                TEXT_MOTION_AFFINITY.get(component, ["fade", "scale_in", "wave", "typewriter"]),
+                prev_motion, seed + 7,
+            )
+
+        if target.get("accent_fx"):
+            chosen_fx = target["accent_fx"]
+        else:
+            chosen_fx = _pick_affinity(
+                ACCENT_FX_AFFINITY.get(component, ["none", "glow", "burst", "underline_sweep"]),
+                prev_fx, seed + 13,
+            )
 
         target["palette"] = chosen_palette
         target["bg_style"] = chosen_bg
+        target["text_motion"] = chosen_motion
+        target["accent_fx"] = chosen_fx
         prev_palette = chosen_palette
         prev_bg = chosen_bg
+        prev_motion = chosen_motion
+        prev_fx = chosen_fx
 
-    # Style diversity: unique (palette, bg_style) pairs / motion-graphic scenes.
-    pairs: set[tuple[str, str]] = set()
+    # Diversity score: unique 4-tuples / motion-graphic scenes.
+    tuples: set[tuple[str, str, str, str]] = set()
     for item in plan_items:
         m = item.get("match", {})
         if m.get("type") == "motion_graphic":
@@ -158,15 +215,15 @@ def _assign_motion_styles(
             t = m["overlay"]
         else:
             continue
-        if t.get("palette") and t.get("bg_style"):
-            pairs.add((t["palette"], t["bg_style"]))
+        if all(t.get(k) for k in ("palette", "bg_style", "text_motion", "accent_fx")):
+            tuples.add((t["palette"], t["bg_style"], t["text_motion"], t["accent_fx"]))
 
-    diversity = round(len(pairs) / motion_count, 3) if motion_count else 0.0
+    diversity = round(len(tuples) / motion_count, 3) if motion_count else 0.0
     return {
         "primary_palette": primary,
         "motion_scenes": motion_count,
         "primary_usage": primary_count,
-        "unique_style_pairs": len(pairs),
+        "unique_style_tuples": len(tuples),
         "style_diversity_score": diversity,
     }
 

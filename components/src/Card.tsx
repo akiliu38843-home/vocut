@@ -13,6 +13,8 @@
 import React from "react";
 import { z } from "zod";
 import { CardBackground, type BgStyle } from "./CardBackground";
+import type { AccentFxMode } from "./motion/AccentFx";
+import type { TextMotionMode } from "./motion/TextMotion";
 import { ComparisonPanel } from "./components/ComparisonPanel";
 import { KeyNumber } from "./components/KeyNumber";
 import { KeywordHighlight } from "./components/KeywordHighlight";
@@ -61,11 +63,11 @@ export const Card: React.FC<CardProps> = ({
 }) => {
   const p = (props ?? {}) as Record<string, unknown>;
   const palette = resolvePalette(paletteName);
-
-  // Each component will be migrated to accept these as optional props.
-  // For now we pass them through; components that haven't been migrated
-  // simply ignore them (TS permits unknown props on React.FC).
-  const motion = { palette, text_motion, accent_fx };
+  const motion = {
+    palette,
+    text_motion: text_motion as TextMotionMode | undefined,
+    accent_fx: accent_fx as AccentFxMode | undefined,
+  };
 
   const body = (() => {
     switch (component) {

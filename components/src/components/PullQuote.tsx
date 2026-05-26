@@ -1,26 +1,49 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
+import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface PullQuoteProps {
   quote: string;
   attribution?: string;
   palette?: Palette;
-  text_motion?: string;
-  accent_fx?: string;
+  text_motion?: TextMotionMode;
+  accent_fx?: AccentFxMode;
 }
 
 export const PullQuote: React.FC<PullQuoteProps> = ({
   quote,
   attribution,
   palette = PALETTES.editorial_dark,
+  text_motion = "fade",
+  accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const quoteOpacity = interpolate(frame, [0, fps * 0.6], [0, 1], { extrapolateRight: "clamp" });
-  const quoteShift = interpolate(frame, [0, fps * 0.6], [16, 0], { extrapolateRight: "clamp" });
   const attrOpacity = interpolate(frame, [fps * 0.6, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
+  const quoteStyle: React.CSSProperties = {
+    margin: 0,
+    fontFamily: FONTS.display,
+    fontStyle: "italic",
+    fontSize: "clamp(40px, 5vw, 78px)",
+    color: palette.text,
+    textAlign: "center",
+    lineHeight: 1.35,
+  };
+
+  const isCharMode = text_motion === "typewriter" || text_motion === "wave";
+  const quoteEl = isCharMode ? (
+    <blockquote style={quoteStyle}>
+      <TextMotion mode={text_motion} text={quote} />
+    </blockquote>
+  ) : (
+    <TextMotion mode={text_motion}>
+      <blockquote style={quoteStyle}>{quote}</blockquote>
+    </TextMotion>
+  );
 
   return (
     <AbsoluteFill>
@@ -35,6 +58,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({
           padding: "0 12%",
         }}
       >
+        {/* Oversized opening quote mark sits behind the text */}
         <div
           style={{
             position: "absolute",
@@ -50,21 +74,9 @@ export const PullQuote: React.FC<PullQuoteProps> = ({
         >
           “
         </div>
-        <blockquote
-          style={{
-            margin: 0,
-            fontFamily: FONTS.display,
-            fontStyle: "italic",
-            fontSize: "clamp(40px, 5vw, 78px)",
-            color: palette.text,
-            textAlign: "center",
-            lineHeight: 1.35,
-            opacity: quoteOpacity,
-            transform: `translateY(${quoteShift}px)`,
-          }}
-        >
-          {quote}
-        </blockquote>
+        <AccentFx mode={accent_fx} palette={palette}>
+          {quoteEl}
+        </AccentFx>
         {attribution && (
           <p
             style={{

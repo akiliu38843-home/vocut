@@ -1,16 +1,18 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
+import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface ListItemProps {
   items: string[];
   /** Optional eyebrow / section label above the list. */
   label?: string;
-  /** Numbering style: "decimal" (1.) or "none". */
+  /** Numbering style. */
   style?: "decimal" | "none";
   palette?: Palette;
-  text_motion?: string;
-  accent_fx?: string;
+  text_motion?: TextMotionMode;
+  accent_fx?: AccentFxMode;
 }
 
 export const ListItem: React.FC<ListItemProps> = ({
@@ -18,11 +20,12 @@ export const ListItem: React.FC<ListItemProps> = ({
   label,
   style = "decimal",
   palette = PALETTES.editorial_dark,
+  text_motion = "fade",
+  accent_fx = "none",
 }) => {
-  const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const labelOpacity = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: "clamp" });
+  const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   return (
     <AbsoluteFill>
@@ -39,46 +42,43 @@ export const ListItem: React.FC<ListItemProps> = ({
         }}
       >
         {label && (
-          <div
-            style={{
-              fontFamily: FONTS.body,
-              fontSize: 22,
-              color: palette.textSecondary,
-              letterSpacing: 4,
-              textTransform: "uppercase",
-              marginBottom: 20,
-              opacity: labelOpacity,
-            }}
-          >
-            {label}
-          </div>
-        )}
-        {items.map((item, i) => {
-          const delay = (i + 1) * fps * 0.25;
-          const itemOpacity = interpolate(
-            frame,
-            [delay, delay + fps * 0.4],
-            [0, 1],
-            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-          );
-          const shift = interpolate(frame, [delay, delay + fps * 0.4], [12, 0], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          });
-          return (
+          <TextMotion mode="fade" durationFrames={Math.round(fps * 0.4)}>
             <div
-              key={i}
               style={{
-                display: "flex",
-                alignItems: "baseline",
-                gap: 28,
                 fontFamily: FONTS.body,
-                fontSize: 44,
-                color: palette.text,
-                opacity: itemOpacity,
-                transform: `translateX(${shift}px)`,
+                fontSize: 22,
+                color: palette.textSecondary,
+                letterSpacing: 4,
+                textTransform: "uppercase",
+                marginBottom: 20,
               }}
             >
+              {label}
+            </div>
+          </TextMotion>
+        )}
+        {items.map((item, i) => {
+          const startFrame = Math.round((i + 1) * fps * 0.25);
+          const itemTextStyle: React.CSSProperties = {
+            display: "flex",
+            alignItems: "baseline",
+            gap: 28,
+            fontFamily: FONTS.body,
+            fontSize: 44,
+            color: palette.text,
+          };
+          // Per-item rendering: number + content
+          const content = isCharMode ? (
+            <span>
+              <TextMotion mode={text_motion} text={item} startFrame={startFrame} />
+            </span>
+          ) : (
+            <TextMotion mode={text_motion} startFrame={startFrame}>
+              <span style={{ lineHeight: 1.25 }}>{item}</span>
+            </TextMotion>
+          );
+          return (
+            <div key={i} style={itemTextStyle}>
               {style === "decimal" && (
                 <span
                   style={{
@@ -91,7 +91,9 @@ export const ListItem: React.FC<ListItemProps> = ({
                   {String(i + 1).padStart(2, "0")}
                 </span>
               )}
-              <span style={{ lineHeight: 1.25 }}>{item}</span>
+              <AccentFx mode={accent_fx} palette={palette} startFrame={startFrame}>
+                {content}
+              </AccentFx>
             </div>
           );
         })}

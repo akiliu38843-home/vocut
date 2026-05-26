@@ -1,27 +1,30 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
+import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { FONTS, PALETTES, type Palette } from "../theme";
 
 export interface KeywordHighlightProps {
-  /** Full sentence — the entire thing is shown; the highlighted slice is amber. */
+  /** Full sentence. */
   text: string;
-  /** Substring of `text` to emphasize. If absent, no inline highlight. */
+  /** Substring of `text` to emphasize. */
   highlight?: string;
   palette?: Palette;
-  text_motion?: string;
-  accent_fx?: string;
+  text_motion?: TextMotionMode;
+  accent_fx?: AccentFxMode;
 }
 
 export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
   text,
   highlight,
   palette = PALETTES.editorial_dark,
+  text_motion = "fade",
+  accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const fadeIn = interpolate(frame, [0, fps * 0.4], [0, 1], { extrapolateRight: "clamp" });
-  const shift = interpolate(frame, [0, fps * 0.4], [8, 0], { extrapolateRight: "clamp" });
+  // Highlight reveal delay (kept from Phase A behavior).
   const highlightOpacity = interpolate(
     frame,
     [fps * 0.5, fps * 0.9],
@@ -39,6 +42,26 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
     after = text.slice(idx + highlight.length);
   }
 
+  // Char-based motion modes can't show a partial-string highlight color, so
+  // they render the whole text flat in palette.text.
+  const isCharMode = text_motion === "typewriter" || text_motion === "wave";
+
+  const textBlock = isCharMode ? (
+    <TextMotion mode={text_motion} text={text} />
+  ) : (
+    <TextMotion mode={text_motion}>
+      <span>
+        {before}
+        {middle && (
+          <AccentFx mode={accent_fx} palette={palette} startFrame={Math.round(fps * 0.5)}>
+            <span style={{ color: palette.accent, opacity: highlightOpacity }}>{middle}</span>
+          </AccentFx>
+        )}
+        {after}
+      </span>
+    </TextMotion>
+  );
+
   return (
     <AbsoluteFill>
       <div
@@ -54,24 +77,9 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
           color: palette.text,
           lineHeight: 1.3,
           textAlign: "center",
-          opacity: fadeIn,
-          transform: `translateY(${shift}px)`,
         }}
       >
-        <div>
-          {before}
-          {middle && (
-            <span
-              style={{
-                color: palette.accent,
-                opacity: highlightOpacity,
-              }}
-            >
-              {middle}
-            </span>
-          )}
-          {after}
-        </div>
+        <div>{textBlock}</div>
       </div>
     </AbsoluteFill>
   );
