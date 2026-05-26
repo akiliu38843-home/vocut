@@ -138,7 +138,7 @@ def caption_video_via_vision(
     video_path: Path,
     duration_sec: float,
     *,
-    n_frames: int = 3,
+    n_frames: int = 5,
     model: str | None = None,
 ) -> str | None:
     """Ask a vision-capable LLM to describe what's in this clip.
@@ -160,12 +160,14 @@ def caption_video_via_vision(
     if duration_sec <= 0:
         return None
 
-    # Sample frames at 30% / 55% / 80% of duration (skip the front, which is
-    # often a watermark / title card on stock footage).
+    # Sample broadly across the clip (10-90%). Stock reels often splice
+    # watermarks INTO the middle, not just front/back, so we can't safely
+    # skip any one region. Instead we cast a wider net and let the model
+    # pick the most informative frame in its response.
     if n_frames == 1:
-        timestamps = [duration_sec * 0.55]
+        timestamps = [duration_sec * 0.5]
     else:
-        timestamps = [duration_sec * (0.30 + 0.50 * i / max(1, n_frames - 1)) for i in range(n_frames)]
+        timestamps = [duration_sec * (0.10 + 0.80 * i / max(1, n_frames - 1)) for i in range(n_frames)]
 
     images_b64: list[str] = []
     for t in timestamps:
@@ -194,9 +196,13 @@ def caption_video_via_vision(
         {
             "type": "text",
             "text": (
-                "用一句简短的中文（不超过 25 字）描述这段视频的主要画面内容。"
-                "重点是 主体 + 动作 + 场景，不要主观评价。例如：'咖啡师在吧台手冲咖啡'、"
-                "'咖啡农场工人采摘咖啡浆果'、'热水从手冲壶倒入咖啡粉'。"
+                "下面这些是同一段视频的截帧。**只要其中任何一张是真实世界场景**（有人、物、动作、自然/室内环境），"
+                "就用那张为准，忽略其它含 ROYALTY FREE / STOCK FOOTAGE / 品牌 logo / 文字标题 / 滚动字幕 / "
+                "纯色转场 / 模糊运动 的截帧——它们是水印噪声，**不是视频主题**。"
+                "\n\n用一句不超过 25 字的中文描述真实世界那张里的 主体 + 动作 + 场景。"
+                "例如：'咖啡师在吧台手冲咖啡'、'工人在咖啡树下采摘红色浆果'、'热水从手冲壶倒入咖啡粉'。"
+                "\n\n如果**所有截帧都是文字/水印/广告**（没有任何真实世界画面），返回单词 NO_CONTENT。"
+                "否则严格输出一句画面描述，不要写 '这张图...' / '视频显示...' 这种废话开头。"
             ),
         }
     ]
@@ -214,7 +220,9 @@ def caption_video_via_vision(
         )
         text = (resp.choices[0].message.content or "").strip()
         text = re.sub(r"\s+", " ", text)
-        return text or None
+        if not text or "NO_CONTENT" in text:
+            return None
+        return text
     except Exception:
         return None
 
