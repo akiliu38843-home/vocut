@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "license": "MIT (vendored from airbnb/lottie-web test fixtures)",
+  "note": "Starter long-tail pool. The Airbnb test animations are illustrative and loud by design — production users should curate their own subset from LottieFiles or commissioned designs.",
+  "animations": [
+    {
+      "id": "adrock",
+      "file": "adrock.json",
+      "tags": ["character", "portrait", "playful"],
+      "description": "Stylized portrait character",
+      "suited_for": ["pull_quote", "title_card"]
+    },
+    {
+      "id": "banner",
+      "file": "banner.json",
+      "tags": ["banner", "header", "balloon", "celebration"],
+      "description": "CodePen-style banner with balloon, 24s loop",
+      "suited_for": ["title_card", "eyebrow"]
+    },
+    {
+      "id": "dalek",
+      "file": "dalek.json",
+      "tags": ["character", "scifi", "playful"],
+      "description": "Sci-fi character animation",
+      "suited_for": ["pull_quote"]
+    },
+    {
+      "id": "lights",
+      "file": "lights.json",
+      "tags": ["lights", "festive", "particles", "celebration"],
+      "description": "Christmas / festival lights, looping",
+      "suited_for": ["title_card", "pull_quote", "background"]
+    },
+    {
+      "id": "ripple",
+      "file": "ripple.json",
+      "tags": ["abstract", "data", "wave", "ripple", "minimal"],
+      "description": "Ripple graph — clean abstract motion, good for data scenes",
+      "suited_for": ["key_number", "pull_quote", "background"]
+    },
+    {
+      "id": "starfish",
+      "file": "starfish.json",
+      "tags": ["nature", "organic", "minimal", "abstract"],
+      "description": "Starfish — organic spreading motion",
+      "suited_for": ["pull_quote", "background"]
+    }
+  ]
+}

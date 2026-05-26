@@ -19,6 +19,7 @@ import { ComparisonPanel } from "./components/ComparisonPanel";
 import { KeyNumber } from "./components/KeyNumber";
 import { KeywordHighlight } from "./components/KeywordHighlight";
 import { ListItem } from "./components/ListItem";
+import { LottieCard } from "./components/LottieCard";
 import { PullQuote } from "./components/PullQuote";
 import { TitleCard } from "./components/TitleCard";
 import { resolvePalette } from "./theme";
@@ -31,6 +32,7 @@ export const cardSchema = z.object({
     "comparison_panel",
     "list_item",
     "keyword_highlight",
+    "lottie",
   ]),
   /** Component-specific props. Permissive at the schema level. */
   props: z.record(z.string(), z.any()).optional(),
@@ -141,6 +143,16 @@ export const Card: React.FC<CardProps> = ({
             {...motion}
           />
         );
+      case "lottie":
+        return (
+          <LottieCard
+            lottie_id={p.lottie_id as string | undefined}
+            lottie_src={p.lottie_src as string | undefined}
+            caption={(p.caption as string) ?? sentence}
+            lottie_opacity={p.lottie_opacity as number | undefined}
+            {...motion}
+          />
+        );
       default: {
         const _exhaustive: never = component;
         return <KeywordHighlight text={sentence ?? "?"} {...motion} />;
@@ -148,9 +160,13 @@ export const Card: React.FC<CardProps> = ({
     }
   })();
 
+  // LottieCard supplies its own background layer (the animation), so
+  // suppressing CardBackground avoids paint over.
+  const showCardBg = component !== "lottie";
+
   return (
     <>
-      <CardBackground palette={palette} bg_style={bg_style as BgStyle | undefined} />
+      {showCardBg && <CardBackground palette={palette} bg_style={bg_style as BgStyle | undefined} />}
       {body}
     </>
   );

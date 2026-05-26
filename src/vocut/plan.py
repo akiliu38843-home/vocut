@@ -44,6 +44,57 @@ def _default_llm_model() -> str:
 
 DEFAULT_LLM_MODEL = _default_llm_model()
 
+
+# -----------------------------------------------------------------------------
+# Lottie pool — vendored MIT animations under components/public/lottie/
+# -----------------------------------------------------------------------------
+
+
+def _find_lottie_manifest() -> dict[str, Any]:
+    """Locate components/public/lottie/manifest.json. Returns an empty
+    {"animations": []} if it can't be found (production builds without the
+    Remotion subproject still work — they just won't pick lottie ids)."""
+    here = Path(__file__).resolve()
+    candidates = [
+        Path(os.environ.get("VOCUT_COMPONENTS_DIR", "")) / "public" / "lottie" / "manifest.json",
+        Path.cwd() / "components" / "public" / "lottie" / "manifest.json",
+    ]
+    for i in range(2, min(6, len(here.parents))):
+        candidates.append(here.parents[i] / "components" / "public" / "lottie" / "manifest.json")
+    for c in candidates:
+        try:
+            if c and c.exists():
+                return json.loads(c.read_text())
+        except Exception:
+            continue
+    return {"animations": []}
+
+
+_LOTTIE_MANIFEST_CACHE: dict[str, Any] | None = None
+
+
+def get_lottie_manifest() -> dict[str, Any]:
+    """Lazily-loaded cached manifest. Safe to call repeatedly."""
+    global _LOTTIE_MANIFEST_CACHE
+    if _LOTTIE_MANIFEST_CACHE is None:
+        _LOTTIE_MANIFEST_CACHE = _find_lottie_manifest()
+    return _LOTTIE_MANIFEST_CACHE
+
+
+def pick_lottie_id(sentence: str, seed: int = 0) -> str:
+    """Pick a Lottie animation id from the manifest. Deterministic — same
+    inputs always return the same id.
+
+    Strategy: rotate through manifest entries by seed; future enhancement
+    can add tag-matching against sentence keywords.
+    """
+    manifest = get_lottie_manifest()
+    anims = manifest.get("animations", [])
+    if not anims:
+        return "ripple"  # safe default present in the vendored set
+    idx = seed % len(anims)
+    return anims[idx]["id"]
+
 # Motion-graphic catalog (PoC v1+v2 validated these as the P0 essentials).
 MOTION_GRAPHIC_COMPONENTS = {
     "key_number",
@@ -52,6 +103,7 @@ MOTION_GRAPHIC_COMPONENTS = {
     "comparison_panel",
     "list_item",
     "keyword_highlight",
+    "lottie",  # long-tail fallback: vendored MIT Lottie pool, see components/public/lottie/
 }
 
 # -----------------------------------------------------------------------------
@@ -84,6 +136,7 @@ TEXT_MOTION_AFFINITY: dict[str, list[str]] = {
     "comparison_panel":  ["fade", "scale_in"],
     "list_item":         ["wave", "fade"],
     "keyword_highlight": ["fade", "scale_in"],  # char-modes lose partial highlight
+    "lottie":            ["fade", "scale_in"],  # caption over animation
 }
 
 # Per-component preference for accent decoration.
@@ -94,6 +147,7 @@ ACCENT_FX_AFFINITY: dict[str, list[str]] = {
     "comparison_panel":  ["none", "underline_sweep"],
     "list_item":         ["none", "underline_sweep"],
     "keyword_highlight": ["underline_sweep", "glow"],
+    "lottie":            ["none", "underline_sweep"], # animation carries energy
 }
 
 
@@ -172,7 +226,17 @@ def _assign_motion_styles(
         # different scenes pull different affinity entries.
         seed = (h + motion_count * 31) % 7919
 
-        if target.get("bg_style"):
+        # Lottie supplies its own visual background; bg_style does not apply.
+        if component == "lottie":
+            chosen_bg = None
+            # Pick a Lottie id if the caller didn't specify one.
+            if not target.get("props"):
+                target["props"] = {}
+            if not target["props"].get("lottie_id") and not target["props"].get("lottie_src"):
+                target["props"]["lottie_id"] = pick_lottie_id(
+                    item.get("sentence", ""), seed=seed,
+                )
+        elif target.get("bg_style"):
             chosen_bg = target["bg_style"]
         else:
             chosen_bg = _pick_affinity(
@@ -197,15 +261,17 @@ def _assign_motion_styles(
             )
 
         target["palette"] = chosen_palette
-        target["bg_style"] = chosen_bg
+        if chosen_bg is not None:
+            target["bg_style"] = chosen_bg
         target["text_motion"] = chosen_motion
         target["accent_fx"] = chosen_fx
         prev_palette = chosen_palette
-        prev_bg = chosen_bg
+        prev_bg = chosen_bg or prev_bg  # don't let lottie reset the anti-adjacent state
         prev_motion = chosen_motion
         prev_fx = chosen_fx
 
-    # Diversity score: unique 4-tuples / motion-graphic scenes.
+    # Diversity score: unique 4-tuples / motion-graphic scenes. For lottie
+    # components, lottie_id stands in for bg_style (it IS the background).
     tuples: set[tuple[str, str, str, str]] = set()
     for item in plan_items:
         m = item.get("match", {})
@@ -215,8 +281,9 @@ def _assign_motion_styles(
             t = m["overlay"]
         else:
             continue
-        if all(t.get(k) for k in ("palette", "bg_style", "text_motion", "accent_fx")):
-            tuples.add((t["palette"], t["bg_style"], t["text_motion"], t["accent_fx"]))
+        bg_or_lottie = t.get("bg_style") or (t.get("props") or {}).get("lottie_id")
+        if t.get("palette") and bg_or_lottie and t.get("text_motion") and t.get("accent_fx"):
+            tuples.add((t["palette"], bg_or_lottie, t["text_motion"], t["accent_fx"]))
 
     diversity = round(len(tuples) / motion_count, 3) if motion_count else 0.0
     return {
