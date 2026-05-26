@@ -167,6 +167,49 @@ ACCENT_FX_AFFINITY: dict[str, list[str]] = {
 }
 
 
+def _insert_section_title_cards(
+    plan_items: list[dict[str, Any]],
+    *,
+    card_duration_sec: float = 2.5,
+) -> list[dict[str, Any]]:
+    """Insert a synthetic title_card scene before each unique section header
+    encountered in the script.
+
+    Each sentence in plan_items may carry `preceding_headers` (set by
+    parse_script). Each header's title becomes a title_card scene if we
+    haven't already rendered one for that title. The resulting list keeps
+    the original sentences in order, with synthetic cards spliced in.
+    """
+    result: list[dict[str, Any]] = []
+    seen_titles: set[str] = set()
+    for item in plan_items:
+        headers = item.get("preceding_headers") or []
+        for h in headers:
+            title = h.get("title")
+            if not title or title in seen_titles:
+                continue
+            seen_titles.add(title)
+            level = int(h.get("level", 2))
+            # H1 gets a longer "intro" card; deeper sections get shorter flashes.
+            dur = card_duration_sec * (1.4 if level == 1 else 0.9)
+            result.append({
+                "sentence_idx": -1,
+                "sentence": title,
+                "section": dict(h),
+                "duration_estimate_sec": round(dur, 2),
+                "synthetic": "section_title",
+                "match": {
+                    "type": "motion_graphic",
+                    "component": "title_card",
+                    "props": {"title": title},
+                    "confidence": 1.0,
+                    "reasoning": f"auto-inserted title_card for section (H{level})",
+                },
+            })
+        result.append(item)
+    return result
+
+
 def _assign_motion_styles(
     plan_items: list[dict[str, Any]],
     seed_source: str = "",
@@ -341,6 +384,7 @@ def parse_script(content: str) -> list[dict[str, Any]]:
     """
     sentences: list[dict[str, Any]] = []
     current_section: dict[str, Any] | None = None
+    pending_headers: list[dict[str, Any]] = []
 
     for raw_line in content.splitlines():
         line = raw_line.strip()
@@ -353,6 +397,7 @@ def parse_script(content: str) -> list[dict[str, Any]]:
                 "level": len(header_m.group(1)),
                 "title": header_m.group(2).strip(),
             }
+            pending_headers.append(dict(current_section))
             continue
 
         list_m = LIST_ITEM_PREFIX.match(line)
@@ -361,13 +406,15 @@ def parse_script(content: str) -> list[dict[str, Any]]:
         for part in SENTENCE_SPLIT_RE.split(text):
             part = part.strip()
             if part:
-                sentences.append(
-                    {
-                        "idx": len(sentences),
-                        "text": part,
-                        "section": dict(current_section) if current_section else None,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "idx": len(sentences),
+                    "text": part,
+                    "section": dict(current_section) if current_section else None,
+                }
+                if pending_headers:
+                    entry["preceding_headers"] = pending_headers
+                    pending_headers = []
+                sentences.append(entry)
     return sentences
 
 
@@ -710,6 +757,8 @@ def build_plan_item(
         "section": sentence.get("section"),
         "duration_estimate_sec": None,
     }
+    if sentence.get("preceding_headers"):
+        item["preceding_headers"] = sentence["preceding_headers"]
     match_type = match.get("type", "motion_graphic")
 
     if match_type == "footage" or match_type == "hybrid":
@@ -952,6 +1001,9 @@ def plan(
             prev_file_path = used_file
         else:
             prev_file_path = None  # motion_graphic-only scene resets the anti-adjacent state
+
+    # Splice in title_card scenes for every section header encountered.
+    plan_items = _insert_section_title_cards(plan_items)
 
     # Auto-assign palette + bg_style on every motion-graphic / hybrid scene.
     style_stats = _assign_motion_styles(plan_items, seed_source=str(script_path.resolve()))
