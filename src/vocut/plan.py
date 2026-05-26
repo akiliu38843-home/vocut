@@ -54,6 +54,122 @@ MOTION_GRAPHIC_COMPONENTS = {
     "keyword_highlight",
 }
 
+# -----------------------------------------------------------------------------
+# Style direction — auto-assign palette + bg_style per motion-graphic scene
+# -----------------------------------------------------------------------------
+# Two motion-graphic scenes never share a palette in a row; the same video
+# carries a "primary" palette ~60% of the time so it doesn't feel like a slot
+# machine. The remaining scenes rotate through the other 7 palettes.
+
+PALETTE_NAMES = [
+    "editorial_dark", "cobalt_data", "warm_paper", "gold_on_black",
+    "minimal_light", "deep_purple", "verdant", "ink_red",
+]
+
+# Which bg styles look right for each component. First entry is preferred.
+BG_AFFINITY: dict[str, list[str]] = {
+    "title_card":        ["gradient", "solid"],
+    "key_number":        ["shader", "particles"],
+    "pull_quote":        ["particles", "shader"],
+    "comparison_panel":  ["solid", "gradient"],
+    "list_item":         ["gradient", "solid"],
+    "keyword_highlight": ["particles", "shader"],
+}
+
+
+def _assign_motion_styles(
+    plan_items: list[dict[str, Any]],
+    seed_source: str = "",
+) -> dict[str, Any]:
+    """Walk plan_items and fill palette + bg_style on each motion-graphic match.
+
+    Rules:
+      - Respect any palette / bg_style already present (LLM- or hand-set).
+      - Pick a video-level primary palette deterministically from seed_source.
+      - Aim for the primary palette to win ~60% of scenes; rotate the other
+        palettes for the rest.
+      - Never repeat palette or bg_style on directly adjacent scenes.
+      - Each component prefers its affinity bg style.
+
+    Returns a small stats dict the caller can fold into plan_doc.meta.
+    """
+    import hashlib
+
+    h = int(hashlib.sha256(seed_source.encode("utf-8")).hexdigest(), 16)
+    primary = PALETTE_NAMES[h % len(PALETTE_NAMES)]
+    accents = [p for p in PALETTE_NAMES if p != primary]
+
+    prev_palette: str | None = None
+    prev_bg: str | None = None
+    primary_count = 0
+    motion_count = 0
+    accent_idx = h % len(accents)  # rotate starting index
+
+    for i, item in enumerate(plan_items):
+        match = item.get("match", {})
+        kind = match.get("type")
+        # hybrid items style their overlay; motion_graphic styles itself.
+        if kind == "motion_graphic":
+            target = match
+        elif kind == "hybrid" and isinstance(match.get("overlay"), dict):
+            target = match["overlay"]
+            if target.get("type") != "motion_graphic":
+                continue
+        else:
+            continue
+
+        motion_count += 1
+        component = target.get("component", "keyword_highlight")
+
+        # Palette: prefer primary while under the soft cap and no collision
+        # with the previous scene; otherwise rotate accents until non-collision.
+        primary_cap = max(1, int(round(motion_count * 0.6)))
+        if target.get("palette"):
+            chosen_palette = target["palette"]
+        elif primary != prev_palette and primary_count < primary_cap:
+            chosen_palette = primary
+            primary_count += 1
+        else:
+            chosen_palette = accents[accent_idx % len(accents)]
+            accent_idx += 1
+            while chosen_palette == prev_palette and accents:
+                chosen_palette = accents[accent_idx % len(accents)]
+                accent_idx += 1
+
+        # bg_style: respect existing; otherwise affinity-first, anti-adjacent.
+        if target.get("bg_style"):
+            chosen_bg = target["bg_style"]
+        else:
+            candidates = BG_AFFINITY.get(component, ["solid", "gradient", "particles", "shader"])
+            chosen_bg = next((b for b in candidates if b != prev_bg), candidates[0])
+
+        target["palette"] = chosen_palette
+        target["bg_style"] = chosen_bg
+        prev_palette = chosen_palette
+        prev_bg = chosen_bg
+
+    # Style diversity: unique (palette, bg_style) pairs / motion-graphic scenes.
+    pairs: set[tuple[str, str]] = set()
+    for item in plan_items:
+        m = item.get("match", {})
+        if m.get("type") == "motion_graphic":
+            t = m
+        elif m.get("type") == "hybrid" and isinstance(m.get("overlay"), dict):
+            t = m["overlay"]
+        else:
+            continue
+        if t.get("palette") and t.get("bg_style"):
+            pairs.add((t["palette"], t["bg_style"]))
+
+    diversity = round(len(pairs) / motion_count, 3) if motion_count else 0.0
+    return {
+        "primary_palette": primary,
+        "motion_scenes": motion_count,
+        "primary_usage": primary_count,
+        "unique_style_pairs": len(pairs),
+        "style_diversity_score": diversity,
+    }
+
 
 # -----------------------------------------------------------------------------
 # Script parsing
@@ -633,6 +749,9 @@ def plan(
         plan_items.append(item)
         stats_match_types[item["match"]["type"]] += 1
 
+    # Auto-assign palette + bg_style on every motion-graphic / hybrid scene.
+    style_stats = _assign_motion_styles(plan_items, seed_source=str(script_path.resolve()))
+
     plan_doc = {
         "meta": {
             "script_path": str(script_path.resolve()),
@@ -644,6 +763,7 @@ def plan(
             "llm_used": client is not None,
             "confidence_threshold": confidence_threshold,
             "topk": topk,
+            "style": style_stats,
         },
         "plan": plan_items,
     }
@@ -667,6 +787,8 @@ def plan(
         )
         if plan_items
         else 0.0,
+        "style_diversity_score": style_stats["style_diversity_score"],
+        "primary_palette": style_stats["primary_palette"],
         "output": str(output_path.resolve()),
         "llm_used": client is not None,
     }
