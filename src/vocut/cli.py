@@ -54,6 +54,10 @@ def _cmd_render(args: argparse.Namespace) -> int:
     if voiceover and not voiceover.exists():
         print(f"error: voiceover not found: {voiceover}", file=sys.stderr)
         return 2
+    music = Path(args.music).resolve() if args.music else None
+    if music and not music.exists():
+        print(f"error: music not found: {music}", file=sys.stderr)
+        return 2
     out_path = Path(args.out).resolve()
 
     def progress(event: dict) -> None:
@@ -67,11 +71,19 @@ def _cmd_render(args: argparse.Namespace) -> int:
             print(f"  concatenating {event['n']} segments", file=sys.stderr)
         elif phase == "overlay_voiceover":
             print("  overlaying voiceover audio", file=sys.stderr)
+        elif phase == "overlay_music":
+            print("  overlaying music", file=sys.stderr)
+        elif phase == "mix_audio":
+            print("  mixing voiceover + music", file=sys.stderr)
 
     stats = render(
         plan_path=plan_path,
         out_path=out_path,
         voiceover=voiceover,
+        music=music,
+        music_volume=args.music_volume,
+        music_fade_in=args.music_fade_in,
+        music_fade_out=args.music_fade_out,
         fps=args.fps,
         width=args.width,
         height=args.height,
@@ -260,6 +272,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("plan", help="plan.json from `vocut plan`")
     p_render.add_argument("--out", default="output.mp4", help="Output mp4 path (default: ./output.mp4)")
     p_render.add_argument("--voiceover", help="Voiceover audio (mp3/wav) to overlay")
+    p_render.add_argument("--music", help="Background music (mp3/wav). Loops if shorter than voiceover.")
+    p_render.add_argument(
+        "--music-volume", type=float, default=0.18,
+        help="BGM linear volume scale (0-1). Default 0.18 ≈ -15dB under voiceover.",
+    )
+    p_render.add_argument(
+        "--music-fade-in", type=float, default=1.5,
+        help="Seconds of fade-in on the music. Default 1.5s.",
+    )
+    p_render.add_argument(
+        "--music-fade-out", type=float, default=2.0,
+        help="Seconds of fade-out on the music. Default 2.0s.",
+    )
     p_render.add_argument("--fps", type=int, default=30)
     p_render.add_argument("--width", type=int, default=1280)
     p_render.add_argument("--height", type=int, default=720)

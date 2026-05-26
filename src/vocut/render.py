@@ -467,6 +467,83 @@ def overlay_voiceover(video: Path, voiceover: Path, out_mp4: Path) -> Path:
     return out_mp4
 
 
+def mux_audio(
+    video: Path,
+    out_mp4: Path,
+    *,
+    voiceover: Path | None = None,
+    music: Path | None = None,
+    music_volume: float = 0.18,
+    music_fade_in: float = 1.5,
+    music_fade_out: float = 2.0,
+) -> Path:
+    """Mux voiceover and/or BGM into the silent rendered video.
+
+    - voiceover plays at full volume (the audio source of truth)
+    - music is loop-padded if shorter than voiceover, ducked to `music_volume`
+      (0.0-1.0 linear scale, 0.18 ≈ -15dB), and fades in / out at the edges
+    - if only one of {voiceover, music} is given, that becomes the sole track
+    - if neither is given, the silent video is copied through
+
+    Output length is clamped to the voiceover (or music, if no voiceover).
+    """
+    if voiceover is None and music is None:
+        shutil.copyfile(video, out_mp4)
+        return out_mp4
+
+    primary = voiceover or music
+    target_dur = _probe_duration(primary) if primary else None
+
+    cmd: list[str] = [_ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(video)]
+    if voiceover:
+        cmd.extend(["-i", str(voiceover)])
+    if music:
+        cmd.extend(["-i", str(music)])
+
+    # Stream indices: 0=video, 1=voiceover (if present), then music
+    music_idx = 2 if voiceover else 1
+
+    filter_parts: list[str] = []
+    if music:
+        # Loop the music indefinitely, trim to target length, fade in/out, attenuate.
+        loop_dur = target_dur if (target_dur and target_dur > 0) else 0
+        loop_chain = f"[{music_idx}:a]aloop=loop=-1:size=2e+09"
+        if loop_dur > 0:
+            loop_chain += f",atrim=duration={loop_dur:.3f}"
+        loop_chain += f",volume={music_volume:.3f}"
+        if music_fade_in > 0:
+            loop_chain += f",afade=t=in:st=0:d={music_fade_in:.2f}"
+        if music_fade_out > 0 and loop_dur > music_fade_out:
+            fade_start = max(0.0, loop_dur - music_fade_out)
+            loop_chain += f",afade=t=out:st={fade_start:.2f}:d={music_fade_out:.2f}"
+        loop_chain += "[bgm]"
+        filter_parts.append(loop_chain)
+
+    if voiceover and music:
+        filter_parts.append("[1:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[aout]")
+        audio_map = "[aout]"
+    elif voiceover:
+        audio_map = "1:a:0"
+    else:  # music only
+        audio_map = "[bgm]"
+
+    if filter_parts:
+        cmd.extend(["-filter_complex", ";".join(filter_parts)])
+    cmd.extend([
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-map", "0:v:0",
+        "-map", audio_map,
+    ])
+    if target_dur and target_dur > 0:
+        cmd.extend(["-t", f"{target_dur:.3f}"])
+    else:
+        cmd.append("-shortest")
+    cmd.append(str(out_mp4))
+    _run(cmd)
+    return out_mp4
+
+
 # -----------------------------------------------------------------------------
 # Top-level orchestrator
 # -----------------------------------------------------------------------------
@@ -481,6 +558,10 @@ def render(
     out_path: Path,
     *,
     voiceover: Path | None = None,
+    music: Path | None = None,
+    music_volume: float = 0.18,
+    music_fade_in: float = 1.5,
+    music_fade_out: float = 2.0,
     fps: int = DEFAULT_FPS,
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
@@ -581,10 +662,19 @@ def render(
         concat_segments(segments, concat_path)
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        if voiceover:
+        if voiceover or music:
+            phase_label = "mix_audio" if (voiceover and music) else (
+                "overlay_voiceover" if voiceover else "overlay_music"
+            )
             if progress_callback:
-                progress_callback({"phase": "overlay_voiceover"})
-            overlay_voiceover(concat_path, voiceover, out_path)
+                progress_callback({"phase": phase_label})
+            mux_audio(
+                concat_path, out_path,
+                voiceover=voiceover, music=music,
+                music_volume=music_volume,
+                music_fade_in=music_fade_in,
+                music_fade_out=music_fade_out,
+            )
         else:
             shutil.copyfile(concat_path, out_path)
     finally:
@@ -596,6 +686,8 @@ def render(
         "segments_failed": len(failed),
         "failed_items": failed,
         "with_voiceover": voiceover is not None,
+        "with_music": music is not None,
+        "music_volume": music_volume if music else None,
         "frame_size": f"{width}x{height}",
         "fps": fps,
         "motion_backend": motion_backend,
