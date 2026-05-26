@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -97,6 +98,10 @@ def transcribe_file(path: Path, model) -> tuple[list[dict], dict]:
 
     segments = [{idx, start, end, text}, ...]
     meta = {duration_sec, language}
+
+    If the audio yields no speech (silent stock footage), fall back to a
+    single synthetic segment derived from the filename so the clip still
+    enters the search space. Disable with VOCUT_FILENAME_FALLBACK=0.
     """
     segments_iter, info = model.transcribe(str(path), beam_size=5, vad_filter=True)
     segments: list[dict] = []
@@ -116,6 +121,24 @@ def transcribe_file(path: Path, model) -> tuple[list[dict], dict]:
         "duration_sec": float(info.duration) if info.duration else None,
         "language": info.language,
     }
+
+    fallback_on = os.environ.get("VOCUT_FILENAME_FALLBACK", "1") != "0"
+    if not segments and fallback_on:
+        # Use the file stem as descriptive text. Replace common separators
+        # so multi-word filenames embed as natural phrases.
+        fname_text = re.sub(r"[-_.]+", " ", path.stem).strip()
+        duration = meta["duration_sec"] or 0.0
+        if fname_text and duration > 0.0:
+            segments.append(
+                {
+                    "idx": 0,
+                    "start": 0.0,
+                    "end": float(duration),
+                    "text": fname_text,
+                    "_fallback": "filename",
+                }
+            )
+
     return segments, meta
 
 
