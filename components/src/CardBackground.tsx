@@ -17,6 +17,8 @@
 
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { ThreeCanvas } from "@remotion/three";
+import { Color } from "three";
 import type { Palette } from "./theme";
 
 export type BgStyle = "solid" | "gradient" | "particles" | "shader";
@@ -95,29 +97,94 @@ const ParticlesBg: React.FC<BgProps> = ({ palette }) => {
   );
 };
 
-// ─── shader (CSS-only pseudo-shader) ───────────────────────────────────────
-const ShaderBg: React.FC<BgProps> = ({ palette }) => {
+// ─── shader (real WebGL via Three.js fragment shader) ──────────────────────
+const SHADER_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SHADER_FRAG = /* glsl */ `
+  precision highp float;
+  uniform float uTime;
+  uniform vec3 uBg;
+  uniform vec3 uSurface;
+  uniform vec3 uAccent;
+  uniform float uAspect;
+  varying vec2 vUv;
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 5; i++) {
+      v += a * noise(p);
+      p *= 2.0;
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  void main() {
+    vec2 uv = vUv;
+    uv.x *= uAspect;
+    float n1 = fbm(uv * 2.5 + vec2(uTime * 0.08, uTime * 0.04));
+    float n2 = fbm(uv * 1.8 + vec2(-uTime * 0.05, uTime * 0.09));
+    vec3 base = mix(uBg, uSurface, smoothstep(0.3, 0.75, n1));
+    vec3 col = mix(base, uAccent, smoothstep(0.62, 0.88, n2) * 0.30);
+    float vig = smoothstep(1.25, 0.35, length(vUv - 0.5) * 1.5);
+    col = mix(uBg, col, vig);
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const ShaderQuad: React.FC<{ palette: Palette }> = ({ palette }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  // Conic angle drifts; radial spot drifts; together they create a slow
-  // volumetric feel reminiscent of an animated GLSL noise blob.
-  const conicAngle = interpolate(frame, [0, fps * 8], [0, 360]);
-  const spotX = 50 + Math.sin((frame / fps) * 0.6) * 18;
-  const spotY = 50 + Math.cos((frame / fps) * 0.4) * 14;
+  const { fps, width, height } = useVideoConfig();
+  const uniforms = React.useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uBg: { value: new Color(palette.bg) },
+      uSurface: { value: new Color(palette.surface) },
+      uAccent: { value: new Color(palette.accent) },
+      uAspect: { value: width / height },
+    }),
+    // Recreate uniforms whenever palette changes so its colors update.
+    [palette.bg, palette.surface, palette.accent, width, height],
+  );
+  // Per-frame uniform tick (mutates the existing uniform values in place).
+  uniforms.uTime.value = frame / fps;
   return (
-    <AbsoluteFill style={{ background: palette.bg, overflow: "hidden" }}>
-      <AbsoluteFill
-        style={{
-          background: `conic-gradient(from ${conicAngle}deg at 50% 50%, ${palette.bg}, ${palette.surface}, ${palette.bg}, ${palette.surface}, ${palette.bg})`,
-          opacity: 0.55,
-          filter: "blur(40px)",
-        }}
+    <mesh>
+      <planeGeometry args={[2, 2]} />
+      <shaderMaterial
+        vertexShader={SHADER_VERT}
+        fragmentShader={SHADER_FRAG}
+        uniforms={uniforms}
       />
-      <AbsoluteFill
-        style={{
-          background: `radial-gradient(circle at ${spotX}% ${spotY}%, ${palette.accent}33 0%, transparent 45%)`,
-        }}
-      />
+    </mesh>
+  );
+};
+
+const ShaderBg: React.FC<BgProps> = ({ palette }) => {
+  const { width, height } = useVideoConfig();
+  return (
+    <AbsoluteFill style={{ background: palette.bg }}>
+      <ThreeCanvas width={width} height={height}>
+        <ShaderQuad palette={palette} />
+      </ThreeCanvas>
     </AbsoluteFill>
   );
 };
