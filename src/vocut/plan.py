@@ -439,7 +439,10 @@ For each sentence, choose ONE of:
 
 Motion-graphic components (pick whichever fits the sentence semantics):
   - key_number       numbers, dates, durations, percentages, version IDs
-  - pull_quote       direct quotes, mottos, italicized sayings
+  - pull_quote       direct quotes, mottos, italicized sayings, maxims,
+                     aphorisms, OR any sentence that reads like a quoted
+                     truth even when no "" 「」 marks are present
+                     (e.g. "X 的 Y，N 成花在你看不见的地方")
   - title_card       section transitions, chapter markers
   - comparison_panel explicit comparisons (A vs B, before vs after, multi-region)
   - list_item        enumerated items ("首先/其次", "第一/第二", "A、B、C")
@@ -891,8 +894,29 @@ def plan(
     plan_items: list[dict[str, Any]] = []
     stats_match_types: dict[str, int] = {"footage": 0, "motion_graphic": 0, "hybrid": 0}
 
+    # Anti-repeat bookkeeping. A clip should not be reused back-to-back,
+    # and its total usage is soft-capped so one filename-fallback-friendly
+    # clip can't eat the whole video.
+    import math
+    n_clips = max(1, len({c["file_path"] for c in clips})) if clips else 1
+    max_per_file = max(1, math.ceil(len(sentences) / n_clips * 1.5))
+    usage_counts: dict[str, int] = {}
+    prev_file_path: str | None = None
+
+    def _shape_candidates(cands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop clips already at the per-video cap; demote the just-used clip."""
+        eligible = [c for c in cands if usage_counts.get(c["file_path"], 0) < max_per_file]
+        # If everything's been capped, fall back to the full list (rare).
+        eligible = eligible or list(cands)
+        if prev_file_path is not None:
+            same = [c for c in eligible if c["file_path"] == prev_file_path]
+            diff = [c for c in eligible if c["file_path"] != prev_file_path]
+            return diff + same  # diff first, prev-clip last
+        return eligible
+
     for s, vec in zip(sentences, sentence_vecs):
-        candidates = topk_candidates(vec, clips, clip_matrix, k=topk)
+        raw_candidates = topk_candidates(vec, clips, clip_matrix, k=topk)
+        candidates = _shape_candidates(raw_candidates)
         if progress_callback:
             progress_callback(
                 {
@@ -915,6 +939,19 @@ def plan(
         item = build_plan_item(s, candidates, match)
         plan_items.append(item)
         stats_match_types[item["match"]["type"]] += 1
+
+        # Update bookkeeping if the LLM picked footage / hybrid.
+        used_file = None
+        m = item["match"]
+        if m.get("type") == "footage":
+            used_file = m.get("source_file")
+        elif m.get("type") == "hybrid":
+            used_file = (m.get("primary") or {}).get("source_file")
+        if used_file:
+            usage_counts[used_file] = usage_counts.get(used_file, 0) + 1
+            prev_file_path = used_file
+        else:
+            prev_file_path = None  # motion_graphic-only scene resets the anti-adjacent state
 
     # Auto-assign palette + bg_style on every motion-graphic / hybrid scene.
     style_stats = _assign_motion_styles(plan_items, seed_source=str(script_path.resolve()))

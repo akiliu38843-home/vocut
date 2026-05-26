@@ -8,13 +8,18 @@ Architecture: see docs/ARCHITECTURE.md — this module owns the index pipeline.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
+import shutil
 import sqlite3
+import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -93,6 +98,127 @@ def _load_embedder(model_name: str):
     return SentenceTransformer(model_name)
 
 
+# -----------------------------------------------------------------------------
+# Visual captioning — fallback when audio is silent
+# -----------------------------------------------------------------------------
+
+
+def _ffmpeg_bin_for_capture() -> str:
+    """Path to bundled ffmpeg (also used by vocut.render)."""
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def _extract_frame_jpeg(video_path: Path, t_sec: float) -> bytes | None:
+    """Grab a single JPEG frame at time t_sec from video_path. None on failure."""
+    out_path = Path(tempfile.mkstemp(suffix=".jpg")[1])
+    try:
+        result = subprocess.run(
+            [
+                _ffmpeg_bin_for_capture(), "-y", "-loglevel", "error",
+                "-ss", f"{t_sec:.3f}",
+                "-i", str(video_path),
+                "-frames:v", "1",
+                "-q:v", "5",
+                "-vf", "scale='min(640,iw)':-2",  # downscale large frames to 640w
+                str(out_path),
+            ],
+            capture_output=True, timeout=30,
+        )
+        if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+            return None
+        return out_path.read_bytes()
+    except (subprocess.SubprocessError, OSError):
+        return None
+    finally:
+        out_path.unlink(missing_ok=True)
+
+
+def caption_video_via_vision(
+    video_path: Path,
+    duration_sec: float,
+    *,
+    n_frames: int = 3,
+    model: str | None = None,
+) -> str | None:
+    """Ask a vision-capable LLM to describe what's in this clip.
+
+    Samples `n_frames` evenly-spaced frames, base64-encodes them, sends to an
+    OpenAI-compatible chat endpoint that supports image input. Returns a
+    concise Chinese-language description string, or None if anything fails.
+
+    Auth via VOCUT_LLM_API_KEY + VOCUT_LLM_BASE_URL (same vars as plan.py).
+    Model: VOCUT_VISION_MODEL or sensible default. Set VOCUT_VISION=1 to enable.
+    """
+    if os.environ.get("VOCUT_VISION") != "1":
+        return None
+    api_key = os.environ.get("VOCUT_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("VOCUT_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    if not api_key:
+        return None
+
+    if duration_sec <= 0:
+        return None
+
+    # Sample frames at 30% / 55% / 80% of duration (skip the front, which is
+    # often a watermark / title card on stock footage).
+    if n_frames == 1:
+        timestamps = [duration_sec * 0.55]
+    else:
+        timestamps = [duration_sec * (0.30 + 0.50 * i / max(1, n_frames - 1)) for i in range(n_frames)]
+
+    images_b64: list[str] = []
+    for t in timestamps:
+        b = _extract_frame_jpeg(video_path, t)
+        if b:
+            images_b64.append(base64.b64encode(b).decode("ascii"))
+    if not images_b64:
+        return None
+
+    try:
+        import openai  # already a vocut dep
+    except ImportError:
+        return None
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    client = openai.OpenAI(**kwargs)
+
+    # gpt-4o is the OpenAI default but many compat endpoints (uyilink etc.)
+    # don't proxy it — gpt-5.4-mini is the safer default for those.
+    default_model = "gpt-5.4-mini" if (base_url and "openai.com" not in base_url) else "gpt-4o"
+    chosen_model = model or os.environ.get("VOCUT_VISION_MODEL") or default_model
+
+    content: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": (
+                "用一句简短的中文（不超过 25 字）描述这段视频的主要画面内容。"
+                "重点是 主体 + 动作 + 场景，不要主观评价。例如：'咖啡师在吧台手冲咖啡'、"
+                "'咖啡农场工人采摘咖啡浆果'、'热水从手冲壶倒入咖啡粉'。"
+            ),
+        }
+    ]
+    for b64 in images_b64:
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+        })
+
+    try:
+        resp = client.chat.completions.create(
+            model=chosen_model,
+            max_tokens=80,
+            messages=[{"role": "user", "content": content}],
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        text = re.sub(r"\s+", " ", text)
+        return text or None
+    except Exception:
+        return None
+
+
 def transcribe_file(path: Path, model) -> tuple[list[dict], dict]:
     """Transcribe one audio/video file. Returns (segments, meta).
 
@@ -122,22 +248,29 @@ def transcribe_file(path: Path, model) -> tuple[list[dict], dict]:
         "language": info.language,
     }
 
-    fallback_on = os.environ.get("VOCUT_FILENAME_FALLBACK", "1") != "0"
-    if not segments and fallback_on:
-        # Use the file stem as descriptive text. Replace common separators
-        # so multi-word filenames embed as natural phrases.
-        fname_text = re.sub(r"[-_.]+", " ", path.stem).strip()
+    if not segments:
         duration = meta["duration_sec"] or 0.0
-        if fname_text and duration > 0.0:
-            segments.append(
-                {
+        # Try vision-LLM captioning first; falls back to filename.
+        vision_text = caption_video_via_vision(path, duration) if duration > 0 else None
+        if vision_text:
+            segments.append({
+                "idx": 0,
+                "start": 0.0,
+                "end": float(duration),
+                "text": vision_text,
+                "_fallback": "vision",
+            })
+        else:
+            fallback_on = os.environ.get("VOCUT_FILENAME_FALLBACK", "1") != "0"
+            fname_text = re.sub(r"[-_.]+", " ", path.stem).strip()
+            if fallback_on and fname_text and duration > 0.0:
+                segments.append({
                     "idx": 0,
                     "start": 0.0,
                     "end": float(duration),
                     "text": fname_text,
                     "_fallback": "filename",
-                }
-            )
+                })
 
     return segments, meta
 
