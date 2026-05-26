@@ -76,6 +76,15 @@ def _cmd_render(args: argparse.Namespace) -> int:
         elif phase == "mix_audio":
             print("  mixing voiceover + music", file=sys.stderr)
 
+    # Resolve frame dimensions. --reel is a 1080×1920 preset; explicit
+    # --width / --height always wins.
+    if args.reel:
+        width = args.width or 1080
+        height = args.height or 1920
+    else:
+        width = args.width or 1280
+        height = args.height or 720
+
     stats = render(
         plan_path=plan_path,
         out_path=out_path,
@@ -85,8 +94,9 @@ def _cmd_render(args: argparse.Namespace) -> int:
         music_fade_in=args.music_fade_in,
         music_fade_out=args.music_fade_out,
         fps=args.fps,
-        width=args.width,
-        height=args.height,
+        width=width,
+        height=height,
+        footage_fit=args.footage_fit,
         card_duration_sec=args.card_duration,
         progress_callback=progress,
     )
@@ -286,8 +296,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds of fade-out on the music. Default 2.0s.",
     )
     p_render.add_argument("--fps", type=int, default=30)
-    p_render.add_argument("--width", type=int, default=1280)
-    p_render.add_argument("--height", type=int, default=720)
+    p_render.add_argument("--width", type=int, default=None,
+        help="Output width (default: 1280, or 1080 in --reel mode)")
+    p_render.add_argument("--height", type=int, default=None,
+        help="Output height (default: 720, or 1920 in --reel mode)")
+    p_render.add_argument(
+        "--reel", action="store_true",
+        help="Vertical 9:16 mode for B站短视频 / TikTok / Reels: 1080×1920. "
+             "Footage is center-cropped to fill; explicit --width/--height still wins.",
+    )
+    p_render.add_argument(
+        "--footage-fit",
+        choices=["auto", "letterbox", "fill"],
+        default="auto",
+        help="How footage clips fit the target frame: letterbox (black bars, current default for 16:9), "
+             "fill (center-crop, default for portrait), auto (decide by aspect difference).",
+    )
     p_render.add_argument(
         "--card-duration",
         type=float,

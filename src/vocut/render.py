@@ -340,14 +340,21 @@ def render_footage_segment(
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
     duration_scale: float = 1.0,
+    fit_mode: str = "auto",
 ) -> Path:
-    """Trim [start_sec, end_sec] from source_file. Scale + letterbox to target frame.
+    """Trim [start_sec, end_sec] from source_file. Scale to target frame.
 
     For audio-only sources (.wav / .mp3), produces a silent video segment of the
     requested duration (so the segment can still be concatenated).
 
     `duration_scale` multiplies the requested duration (e.g. 0.85 to shrink
     each scene by 15% so total runtime aligns with a voiceover).
+
+    `fit_mode` controls how source aspect maps to target frame:
+      - "letterbox" — fit source inside frame, pad sides/top with black.
+      - "fill"      — fill frame, crop overflow at center.
+      - "auto"      — fill if target aspect differs from source aspect by > 30%
+                      (e.g. 16:9 source into 9:16 portrait), otherwise letterbox.
     """
     src = footage["source_file"]
     if not Path(src).exists():
@@ -369,22 +376,69 @@ def render_footage_segment(
         _run(cmd)
         return out_mp4
 
-    cmd = [
-        _ffmpeg_bin(), "-y", "-loglevel", "error",
-        "-ss", str(start), "-i", src,
-        "-t", str(duration),
-        "-vf", (
+    # Decide letterbox vs fill. For "auto", probe source aspect and compare
+    # to target; if they're meaningfully different (e.g. 16:9 footage into 9:16
+    # portrait), fill (crop center) rather than waste 60% of the frame on bars.
+    resolved_fit = fit_mode
+    if resolved_fit == "auto":
+        src_dur = _probe_duration(Path(src))  # not aspect, but cheap; want aspect
+        # Probe stderr again for resolution.
+        src_aspect = _probe_aspect(Path(src))
+        target_aspect = width / height
+        if src_aspect and target_aspect:
+            ratio = max(src_aspect, target_aspect) / min(src_aspect, target_aspect)
+            resolved_fit = "fill" if ratio > 1.30 else "letterbox"
+        else:
+            resolved_fit = "letterbox"
+
+    if resolved_fit == "fill":
+        vf = (
+            f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},"
+            f"setsar=1:1,"
+            f"fps={fps}"
+        )
+    else:  # letterbox
+        vf = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
             f"setsar=1:1,"
             f"fps={fps}"
-        ),
+        )
+
+    cmd = [
+        _ffmpeg_bin(), "-y", "-loglevel", "error",
+        "-ss", str(start), "-i", src,
+        "-t", str(duration),
+        "-vf", vf,
         "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
         "-an",
         str(out_mp4),
     ]
     _run(cmd)
     return out_mp4
+
+
+def _probe_aspect(path: Path) -> float | None:
+    """Parse source W/H ratio from ffmpeg -i stderr. None if unknown."""
+    import re
+    try:
+        result = subprocess.run(
+            [_ffmpeg_bin(), "-i", str(path)],
+            capture_output=True, timeout=15,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    # Look for "WxH" in a Video: stream line.
+    m = re.search(r"Video:[^,]*,\s*[^,]+,\s*(\d+)x(\d+)", stderr)
+    if not m:
+        # Fallback: any WxH pattern
+        m = re.search(r"\b(\d{2,5})x(\d{2,5})\b", stderr)
+    if not m:
+        return None
+    w, h = int(m.group(1)), int(m.group(2))
+    return w / h if h > 0 else None
 
 
 # -----------------------------------------------------------------------------
@@ -565,6 +619,7 @@ def render(
     fps: int = DEFAULT_FPS,
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
+    footage_fit: str = "auto",
     card_duration_sec: float = DEFAULT_CARD_DURATION_SEC,
     progress_callback=None,
 ) -> dict[str, Any]:
@@ -612,10 +667,10 @@ def render(
                 )
             try:
                 if kind == "footage":
-                    render_footage_segment(item["match"], seg_path, fps, width, height, duration_scale=duration_scale)
+                    render_footage_segment(item["match"], seg_path, fps, width, height, duration_scale=duration_scale, fit_mode=footage_fit)
                 elif kind == "hybrid":
                     # P0.4: render footage only; overlay deferred to Remotion (P0.3/P0.4.1).
-                    render_footage_segment(item["match"]["primary"], seg_path, fps, width, height, duration_scale=duration_scale)
+                    render_footage_segment(item["match"]["primary"], seg_path, fps, width, height, duration_scale=duration_scale, fit_mode=footage_fit)
                 else:
                     seg_dur = float(item.get("duration_estimate_sec") or card_duration_sec) * duration_scale
                     if components_dir is not None:
