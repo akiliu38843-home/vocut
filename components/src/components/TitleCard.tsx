@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface TitleCardProps {
@@ -25,9 +25,10 @@ export const TitleCard: React.FC<TitleCardProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { fps, width } = useVideoConfig();
-  // 大屏用大字 (FONT_SIZE 9), 竖屏用中字 (FONT_SIZE 7)
-  const titleSize = width >= 1280 ? FONT_SIZE[9] : FONT_SIZE[7];
+  const { fps, height } = useVideoConfig();
+  const titleSize = Math.round(height * TYPE_RATIO.hero);
+  const eyebrowSize = Math.round(height * TYPE_RATIO.label);
+  const subtitleSize = Math.round(height * TYPE_RATIO.body);
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   const titleStyle: React.CSSProperties = {
@@ -67,7 +68,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
             <div
               style={{
                 fontFamily: FONT_STACK.mono,
-                fontSize: FONT_SIZE[1],
+                fontSize: eyebrowSize,
                 fontWeight: FONT_WEIGHT[5],
                 color: palette.accent,
                 letterSpacing: LETTER_SPACING[6],
@@ -96,7 +97,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
               style={{
                 margin: 0,
                 fontFamily: FONT_STACK.body,
-                fontSize: FONT_SIZE[3],
+                fontSize: subtitleSize,
                 fontWeight: FONT_WEIGHT[4],
                 color: palette.textSecondary,
                 lineHeight: LINE_HEIGHT[4],

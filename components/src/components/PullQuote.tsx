@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface PullQuoteProps {
@@ -24,8 +24,9 @@ export const PullQuote: React.FC<PullQuoteProps> = ({
   accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
-  const quoteSize = width >= 1280 ? FONT_SIZE[7] : FONT_SIZE[6];
+  const { fps, height } = useVideoConfig();
+  const quoteSize = Math.round(height * TYPE_RATIO.primary);
+  const attrSize = Math.round(height * TYPE_RATIO.label);
   const attrOpacity = interpolate(frame, [fps * 0.6, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   const quoteStyle: React.CSSProperties = {
@@ -92,7 +93,7 @@ export const PullQuote: React.FC<PullQuoteProps> = ({
               style={{
                 margin: 0,
                 fontFamily: FONT_STACK.body,
-                fontSize: FONT_SIZE[2],
+                fontSize: attrSize,
                 color: palette.textSecondary,
                 letterSpacing: LETTER_SPACING[4],
                 textTransform: "uppercase",

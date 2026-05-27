@@ -16,8 +16,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface LottieCardProps {
@@ -39,8 +39,8 @@ export const LottieCard: React.FC<LottieCardProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { width } = useVideoConfig();
-  const captionSize = width >= 1280 ? FONT_SIZE[6] : FONT_SIZE[5];
+  const { height } = useVideoConfig();
+  const captionSize = Math.round(height * TYPE_RATIO.primary);
   const [animationData, setAnimationData] = useState<LottieAnimationData | null>(null);
   const [handle] = useState(() => delayRender(`lottie:${lottie_id}`));
 

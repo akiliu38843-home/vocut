@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface KeywordHighlightProps {
@@ -24,8 +24,8 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
   accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
-  const textSize = width >= 1280 ? FONT_SIZE[6] : FONT_SIZE[5];
+  const { fps, height } = useVideoConfig();
+  const textSize = Math.round(height * TYPE_RATIO.primary);
   const highlightOpacity = interpolate(frame, [fps * 0.5, fps * 0.9], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   let before = text;

@@ -10,7 +10,7 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Palette } from "./theme";
-import { FONT_SIZE, FONT_WEIGHT, FONT_STACK, LETTER_SPACING, SIZE } from "./tokens";
+import { FONT_WEIGHT, FONT_STACK, LETTER_SPACING, SIZE, TYPE_RATIO } from "./tokens";
 
 export interface SceneFrameProps {
   palette: Palette;
@@ -30,7 +30,8 @@ export const SceneFrame: React.FC<SceneFrameProps> = ({
   children,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, height } = useVideoConfig();
+  const monitorSize = Math.round(height * TYPE_RATIO.mono);
   const monitorOpacity = interpolate(frame, [fps * 0.2, fps * 0.7], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -57,7 +58,7 @@ export const SceneFrame: React.FC<SceneFrameProps> = ({
           <div
             style={{
               fontFamily: FONT_STACK.mono,
-              fontSize: FONT_SIZE[1],
+              fontSize: monitorSize,
               fontWeight: FONT_WEIGHT[5],
               color: palette.textSecondary,
               letterSpacing: LETTER_SPACING[6],

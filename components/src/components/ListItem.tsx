@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface ListItemProps {
@@ -25,8 +25,10 @@ export const ListItem: React.FC<ListItemProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { fps, width } = useVideoConfig();
-  const itemSize = width >= 1280 ? FONT_SIZE[5] : FONT_SIZE[4];
+  const { fps, height } = useVideoConfig();
+  const itemSize = Math.round(height * TYPE_RATIO.value);
+  const labelSize = Math.round(height * TYPE_RATIO.label);
+  const numeralSize = Math.round(height * TYPE_RATIO.numeral);
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   return (
@@ -48,7 +50,7 @@ export const ListItem: React.FC<ListItemProps> = ({
             <div
               style={{
                 fontFamily: FONT_STACK.mono,
-                fontSize: FONT_SIZE[1],
+                fontSize: labelSize,
                 fontWeight: FONT_WEIGHT[5],
                 color: palette.accent,
                 letterSpacing: LETTER_SPACING[6],
@@ -85,10 +87,10 @@ export const ListItem: React.FC<ListItemProps> = ({
                 <span
                   style={{
                     fontFamily: FONT_STACK.mono,
-                    fontSize: itemSize * 0.7,
+                    fontSize: numeralSize,
                     fontWeight: FONT_WEIGHT[5],
                     color: palette.accent,
-                    minWidth: SIZE[7],
+                    minWidth: numeralSize * 1.6,
                     letterSpacing: LETTER_SPACING[3],
                   }}
                 >

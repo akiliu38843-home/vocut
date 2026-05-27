@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface ComparisonItem {
@@ -29,8 +29,10 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { fps, width } = useVideoConfig();
-  const valueSize = width >= 1280 ? FONT_SIZE[7] : FONT_SIZE[6];
+  const { fps, height } = useVideoConfig();
+  const valueSize = Math.round(height * TYPE_RATIO.primary);
+  const labelSize = Math.round(height * TYPE_RATIO.label);
+  const tagSize = Math.round(height * TYPE_RATIO.caption);
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   return (
@@ -44,7 +46,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
               left: SIZE[10],
               right: SIZE[10],
               fontFamily: FONT_STACK.mono,
-              fontSize: FONT_SIZE[1],
+              fontSize: labelSize,
               fontWeight: FONT_WEIGHT[5],
               color: palette.accent,
               letterSpacing: LETTER_SPACING[6],
@@ -96,7 +98,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                   <div
                     style={{
                       fontFamily: FONT_STACK.mono,
-                      fontSize: FONT_SIZE[1],
+                      fontSize: labelSize,
                       fontWeight: FONT_WEIGHT[5],
                       color: palette.textSecondary,
                       letterSpacing: LETTER_SPACING[6],
@@ -115,7 +117,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({
                   <div
                     style={{
                       fontFamily: FONT_STACK.body,
-                      fontSize: FONT_SIZE[2],
+                      fontSize: tagSize,
                       color: palette.accent,
                       letterSpacing: LETTER_SPACING[3],
                     }}

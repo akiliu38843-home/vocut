@@ -72,6 +72,28 @@ export const RADIUS = {
   1: 2, 2: 5, 3: 8, 4: 12, 5: 20, 6: 32, round: 9999,
 } as const;
 
+// ─── 字号比例 ───────────────────────────────────────────────────────────────
+// 按"屏幕高度的百分比"算字号，对齐行业标准:
+//   - Netflix 字幕底线           4-5%
+//   - YouTube/Vox 横屏知识视频   8-13% (主标题)
+//   - Apple Keynote 演讲标题     7-10%
+//   - TikTok/抖音/B站竖屏        10-15%
+//   - CapCut 默认大字            12-15%
+//
+// 用法: const titleSize = Math.round(useVideoConfig().height * TYPE_RATIO.hero)
+// 这样横屏自动小、竖屏自动大、不再死磕固定像素。
+export const TYPE_RATIO = {
+  hero:    0.090,   // title_card 主标题
+  giant:   0.160,   // key_number 主数字 (它是整屏唯一焦点, 比 hero 还大)
+  primary: 0.060,   // pull_quote / keyword_highlight 主文字
+  value:   0.050,   // list_item / comparison_panel 单项
+  body:    0.035,   // subtitle / attribution 等次要正文
+  caption: 0.025,   // 副标 / 小说明
+  label:   0.014,   // mono eyebrow / 大写小标签
+  mono:    0.016,   // 监督文字 "01 / 16"
+  numeral: 0.040,   // 列表序号
+} as const;
+
 // 字体堆 — Open Props 推荐的开源字体优先
 // display: 衬线，正式 / editorial
 // body: 无衬线，正文

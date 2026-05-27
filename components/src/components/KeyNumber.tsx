@@ -4,8 +4,8 @@ import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
 import { PALETTES, type Palette } from "../theme";
 import {
-  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
-  LETTER_SPACING, LINE_HEIGHT, SIZE,
+  FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE, TYPE_RATIO,
 } from "../tokens";
 
 export interface KeyNumberProps {
@@ -28,15 +28,16 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
   accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
-  // 大数字：横屏字号 9（80px），竖屏字号 8（64px）
-  const primarySize = width >= 1280 ? FONT_SIZE[9] : FONT_SIZE[8];
+  const { fps, height } = useVideoConfig();
+  // 主数字按"屏高 16%"算（行业 hero data scene 标准）
+  const primarySize = Math.round(height * TYPE_RATIO.giant);
+  const labelSize = Math.round(height * TYPE_RATIO.label);
   const unitOpacity = interpolate(frame, [fps * 0.4, fps * 0.7], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const labelOpacity = interpolate(frame, [fps * 0.7, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   const primaryStyle: React.CSSProperties = {
     fontFamily: FONT_STACK.display,
-    fontSize: primarySize * 1.4,
+    fontSize: primarySize,
     fontWeight: FONT_WEIGHT[6],
     color: palette.accent,
     lineHeight: LINE_HEIGHT[0],
@@ -82,7 +83,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
             <div
               style={{
                 fontFamily: FONT_STACK.mono,
-                fontSize: FONT_SIZE[1],
+                fontSize: labelSize,
                 fontWeight: FONT_WEIGHT[5],
                 color: palette.textSecondary,
                 letterSpacing: LETTER_SPACING[6],
@@ -100,7 +101,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
             <span
               style={{
                 fontFamily: FONT_STACK.body,
-                fontSize: primarySize * 0.4,
+                fontSize: primarySize * 0.35,
                 fontWeight: FONT_WEIGHT[3],
                 color: palette.text,
                 opacity: unitOpacity,
@@ -125,7 +126,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
             style={{
               margin: 0,
               fontFamily: FONT_STACK.mono,
-              fontSize: FONT_SIZE[1],
+              fontSize: labelSize,
               color: palette.quiet,
               opacity: labelOpacity,
               letterSpacing: LETTER_SPACING[3],
