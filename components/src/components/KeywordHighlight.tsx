@@ -2,12 +2,14 @@ import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
-import { FONTS, PALETTES, type Palette } from "../theme";
+import { PALETTES, type Palette } from "../theme";
+import {
+  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE,
+} from "../tokens";
 
 export interface KeywordHighlightProps {
-  /** Full sentence. */
   text: string;
-  /** Substring of `text` to emphasize. */
   highlight?: string;
   palette?: Palette;
   text_motion?: TextMotionMode;
@@ -22,15 +24,9 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
   accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  // Highlight reveal delay (kept from Phase A behavior).
-  const highlightOpacity = interpolate(
-    frame,
-    [fps * 0.5, fps * 0.9],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-  );
+  const { fps, width } = useVideoConfig();
+  const textSize = width >= 1280 ? FONT_SIZE[6] : FONT_SIZE[5];
+  const highlightOpacity = interpolate(frame, [fps * 0.5, fps * 0.9], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   let before = text;
   let middle = "";
@@ -42,9 +38,18 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
     after = text.slice(idx + highlight.length);
   }
 
-  // Char-based motion modes can't show a partial-string highlight color, so
-  // they render the whole text flat in palette.text.
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
+
+  const baseStyle: React.CSSProperties = {
+    margin: 0,
+    fontFamily: FONT_STACK.body,
+    fontSize: textSize,
+    fontWeight: FONT_WEIGHT[5],
+    color: palette.text,
+    lineHeight: LINE_HEIGHT[2],
+    letterSpacing: LETTER_SPACING[2],
+    textShadow: `0 1px 16px ${palette.bg}aa`,
+  };
 
   const textBlock = isCharMode ? (
     <TextMotion mode={text_motion} text={text} />
@@ -54,7 +59,9 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
         {before}
         {middle && (
           <AccentFx mode={accent_fx} palette={palette} startFrame={Math.round(fps * 0.5)}>
-            <span style={{ color: palette.accent, opacity: highlightOpacity }}>{middle}</span>
+            <span style={{ color: palette.accent, opacity: highlightOpacity, fontWeight: FONT_WEIGHT[7] }}>
+              {middle}
+            </span>
           </AccentFx>
         )}
         {after}
@@ -67,19 +74,15 @@ export const KeywordHighlight: React.FC<KeywordHighlightProps> = ({
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
           height: "100%",
           width: "100%",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "center",
-          padding: "0 10%",
-          fontFamily: FONTS.body,
-          fontSize: "clamp(40px, 5.5vw, 72px)",
-          color: palette.text,
-          lineHeight: 1.3,
-          textAlign: "center",
+          padding: `0 ${SIZE[10]}px`,
         }}
       >
-        <div>{textBlock}</div>
+        <div style={baseStyle}>{textBlock}</div>
       </div>
     </AbsoluteFill>
   );

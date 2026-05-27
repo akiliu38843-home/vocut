@@ -1,12 +1,5 @@
 /**
- * LottieCard — long-tail motion-graphic slot.
- *
- * Renders a Lottie animation (from the bundled vocut/components/public/lottie/
- * pool, or any URL the user passes) as the back layer. A foreground text
- * block carries the script sentence, styled by the active palette.
- *
- * Used when no hand-coded component fits the scene — vocut plan looks up
- * the manifest tags and supplies a `lottie_id` (or `lottie_src` URL).
+ * LottieCard — Lottie animation as backdrop + caption on top.
  */
 
 import React, { useEffect, useState } from "react";
@@ -21,16 +14,16 @@ import {
 import { Lottie, type LottieAnimationData } from "@remotion/lottie";
 import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
-import { FONTS, PALETTES, type Palette } from "../theme";
+import { PALETTES, type Palette } from "../theme";
+import {
+  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE,
+} from "../tokens";
 
 export interface LottieCardProps {
-  /** Lottie animation ID matching components/public/lottie/manifest.json. */
   lottie_id?: string;
-  /** Override: explicit Lottie JSON URL or staticFile path. Wins over lottie_id. */
   lottie_src?: string;
-  /** Overlay caption shown over the animation. */
   caption?: string;
-  /** Animation back-layer opacity. Default 0.55 — keeps caption readable. */
   lottie_opacity?: number;
   palette?: Palette;
   text_motion?: TextMotionMode;
@@ -41,46 +34,36 @@ export const LottieCard: React.FC<LottieCardProps> = ({
   lottie_id = "ripple",
   lottie_src,
   caption,
-  lottie_opacity = 0.55,
+  lottie_opacity = 0.45,
   palette = PALETTES.editorial_dark,
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { fps } = useVideoConfig();
-  const [animationData, setAnimationData] =
-    useState<LottieAnimationData | null>(null);
+  const { width } = useVideoConfig();
+  const captionSize = width >= 1280 ? FONT_SIZE[6] : FONT_SIZE[5];
+  const [animationData, setAnimationData] = useState<LottieAnimationData | null>(null);
   const [handle] = useState(() => delayRender(`lottie:${lottie_id}`));
 
   useEffect(() => {
     const url = lottie_src ?? staticFile(`lottie/${lottie_id}.json`);
     fetch(url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} on ${url}`);
-        return r.json();
-      })
-      .then((data: LottieAnimationData) => {
-        setAnimationData(data);
-        continueRender(handle);
-      })
-      .catch((err) => {
-        cancelRender(`Failed to load lottie ${lottie_id}: ${err.message}`);
-      });
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((data) => { setAnimationData(data); continueRender(handle); })
+      .catch((err) => cancelRender(`lottie ${lottie_id}: ${err.message}`));
   }, [lottie_id, lottie_src, handle]);
 
-  if (!animationData) {
-    return <AbsoluteFill style={{ background: palette.bg }} />;
-  }
+  if (!animationData) return <AbsoluteFill style={{ background: palette.bg }} />;
 
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
   const captionStyle: React.CSSProperties = {
     margin: 0,
-    fontFamily: FONTS.display,
-    fontWeight: 500,
-    fontSize: "clamp(48px, 6vw, 96px)",
+    fontFamily: FONT_STACK.display,
+    fontWeight: FONT_WEIGHT[6],
+    fontSize: captionSize,
     color: palette.text,
-    textAlign: "center",
-    lineHeight: 1.15,
-    textShadow: `0 2px 24px ${palette.bg}cc`,
+    lineHeight: LINE_HEIGHT[2],
+    letterSpacing: LETTER_SPACING[1],
+    textShadow: `0 2px 24px ${palette.bg}, 0 0 40px ${palette.bg}aa`,
   };
   const captionEl = caption
     ? isCharMode
@@ -98,14 +81,12 @@ export const LottieCard: React.FC<LottieCardProps> = ({
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            padding: "0 10%",
+            justifyContent: "flex-start",
+            padding: `0 ${SIZE[10]}px`,
             zIndex: 2,
           }}
         >
-          <AccentFx mode={accent_fx} palette={palette}>
-            {captionEl}
-          </AccentFx>
+          <AccentFx mode={accent_fx} palette={palette}>{captionEl}</AccentFx>
         </AbsoluteFill>
       )}
     </AbsoluteFill>

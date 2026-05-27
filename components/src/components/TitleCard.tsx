@@ -1,13 +1,16 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, useVideoConfig } from "remotion";
 import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
-import { FONTS, PALETTES, type Palette } from "../theme";
+import { PALETTES, type Palette } from "../theme";
+import {
+  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE,
+} from "../tokens";
 
 export interface TitleCardProps {
   title: string;
   subtitle?: string;
-  /** Optional eyebrow line above the title (e.g. "Chapter 03"). */
   eyebrow?: string;
   palette?: Palette;
   text_motion?: TextMotionMode;
@@ -22,36 +25,27 @@ export const TitleCard: React.FC<TitleCardProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  // Subtle rule line that draws in left-to-right; only shown when accent_fx
-  // does not already supply a decoration (avoid double-line).
-  const ruleProgress = interpolate(frame, [fps * 0.3, fps * 1.2], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const showRule = accent_fx === "none" || accent_fx === "glow";
+  const { fps, width } = useVideoConfig();
+  // 大屏用大字 (FONT_SIZE 9), 竖屏用中字 (FONT_SIZE 7)
+  const titleSize = width >= 1280 ? FONT_SIZE[9] : FONT_SIZE[7];
+  const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   const titleStyle: React.CSSProperties = {
     margin: 0,
-    fontFamily: FONTS.display,
-    fontWeight: 400,
-    fontSize: "clamp(48px, 7vw, 116px)",
+    fontFamily: FONT_STACK.display,
+    fontWeight: FONT_WEIGHT[5],
+    fontSize: titleSize,
     color: palette.text,
-    textAlign: "center",
-    lineHeight: 1.1,
+    lineHeight: LINE_HEIGHT[1],
+    letterSpacing: LETTER_SPACING[1],
+    // 极轻的文字阴影 — 让字"贴而不死"
+    textShadow: `0 1px 0 ${palette.bg}, 0 2px 16px ${palette.bg}66`,
   };
 
-  const isCharMode = text_motion === "typewriter" || text_motion === "wave";
   const titleEl = isCharMode ? (
-    <h1 style={titleStyle}>
-      <TextMotion mode={text_motion} text={title} />
-    </h1>
+    <h1 style={titleStyle}><TextMotion mode={text_motion} text={title} /></h1>
   ) : (
-    <TextMotion mode={text_motion}>
-      <h1 style={titleStyle}>{title}</h1>
-    </TextMotion>
+    <TextMotion mode={text_motion}><h1 style={titleStyle}>{title}</h1></TextMotion>
   );
 
   return (
@@ -62,50 +56,51 @@ export const TitleCard: React.FC<TitleCardProps> = ({
           flexDirection: "column",
           height: "100%",
           width: "100%",
-          alignItems: "center",
+          alignItems: "flex-start",      // 左对齐（不再死磕居中）
           justifyContent: "center",
-          padding: "0 8%",
+          padding: `0 ${SIZE[10]}px`,    // Open Props size-10 = 80px
+          gap: SIZE[5],                   // 24px
         }}
       >
         {eyebrow && (
-          <TextMotion mode="fade" durationFrames={Math.round(fps * 0.4)}>
+          <TextMotion mode="fade">
             <div
               style={{
-                fontFamily: FONTS.body,
-                fontSize: 22,
-                letterSpacing: 6,
+                fontFamily: FONT_STACK.mono,
+                fontSize: FONT_SIZE[1],
+                fontWeight: FONT_WEIGHT[5],
+                color: palette.accent,
+                letterSpacing: LETTER_SPACING[6],
                 textTransform: "uppercase",
-                color: palette.textSecondary,
-                marginBottom: 28,
               }}
             >
               {eyebrow}
             </div>
           </TextMotion>
         )}
-        <AccentFx mode={accent_fx} palette={palette} startFrame={0}>
-          {titleEl}
-        </AccentFx>
-        {showRule && (
+        <AccentFx mode={accent_fx} palette={palette}>{titleEl}</AccentFx>
+        {/* 装饰横线：紧贴标题下方，宽度=标题字号的 1.5 倍 —— 锚住，不浮空 */}
+        <TextMotion mode="fade">
           <div
             style={{
-              marginTop: 28,
-              width: `${ruleProgress * 18}%`,
-              height: 1,
-              background: palette.textSecondary,
-              transformOrigin: "left",
+              width: titleSize * 1.5,
+              height: 2,
+              background: palette.accent,
+              marginTop: SIZE[2],
             }}
           />
-        )}
+        </TextMotion>
         {subtitle && (
-          <TextMotion mode="fade" startFrame={Math.round(fps * 0.4)}>
+          <TextMotion mode="fade">
             <p
               style={{
-                marginTop: 28,
-                fontFamily: FONTS.body,
-                fontSize: 26,
+                margin: 0,
+                fontFamily: FONT_STACK.body,
+                fontSize: FONT_SIZE[3],
+                fontWeight: FONT_WEIGHT[4],
                 color: palette.textSecondary,
-                textAlign: "center",
+                lineHeight: LINE_HEIGHT[4],
+                letterSpacing: LETTER_SPACING[2],
                 maxWidth: "70%",
               }}
             >

@@ -1,14 +1,16 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, useVideoConfig } from "remotion";
 import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
-import { FONTS, PALETTES, type Palette } from "../theme";
+import { PALETTES, type Palette } from "../theme";
+import {
+  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE,
+} from "../tokens";
 
 export interface ListItemProps {
   items: string[];
-  /** Optional eyebrow / section label above the list. */
   label?: string;
-  /** Numbering style. */
   style?: "decimal" | "none";
   palette?: Palette;
   text_motion?: TextMotionMode;
@@ -23,8 +25,8 @@ export const ListItem: React.FC<ListItemProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { fps } = useVideoConfig();
-
+  const { fps, width } = useVideoConfig();
+  const itemSize = width >= 1280 ? FONT_SIZE[5] : FONT_SIZE[4];
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
 
   return (
@@ -37,20 +39,21 @@ export const ListItem: React.FC<ListItemProps> = ({
           width: "100%",
           alignItems: "flex-start",
           justifyContent: "center",
-          padding: "0 12%",
-          gap: 28,
+          padding: `0 ${SIZE[10]}px`,
+          gap: SIZE[5],
         }}
       >
         {label && (
-          <TextMotion mode="fade" durationFrames={Math.round(fps * 0.4)}>
+          <TextMotion mode="fade">
             <div
               style={{
-                fontFamily: FONTS.body,
-                fontSize: 22,
-                color: palette.textSecondary,
-                letterSpacing: 4,
+                fontFamily: FONT_STACK.mono,
+                fontSize: FONT_SIZE[1],
+                fontWeight: FONT_WEIGHT[5],
+                color: palette.accent,
+                letterSpacing: LETTER_SPACING[6],
                 textTransform: "uppercase",
-                marginBottom: 20,
+                marginBottom: SIZE[2],
               }}
             >
               {label}
@@ -62,19 +65,18 @@ export const ListItem: React.FC<ListItemProps> = ({
           const itemTextStyle: React.CSSProperties = {
             display: "flex",
             alignItems: "baseline",
-            gap: 28,
-            fontFamily: FONTS.body,
-            fontSize: 44,
+            gap: SIZE[6],
+            fontFamily: FONT_STACK.body,
+            fontSize: itemSize,
+            fontWeight: FONT_WEIGHT[4],
             color: palette.text,
+            lineHeight: LINE_HEIGHT[3],
           };
-          // Per-item rendering: number + content
           const content = isCharMode ? (
-            <span>
-              <TextMotion mode={text_motion} text={item} startFrame={startFrame} />
-            </span>
+            <span><TextMotion mode={text_motion} text={item} startFrame={startFrame} /></span>
           ) : (
             <TextMotion mode={text_motion} startFrame={startFrame}>
-              <span style={{ lineHeight: 1.25 }}>{item}</span>
+              <span>{item}</span>
             </TextMotion>
           );
           return (
@@ -82,10 +84,12 @@ export const ListItem: React.FC<ListItemProps> = ({
               {style === "decimal" && (
                 <span
                   style={{
-                    fontFamily: FONTS.mono,
-                    fontSize: 32,
+                    fontFamily: FONT_STACK.mono,
+                    fontSize: itemSize * 0.7,
+                    fontWeight: FONT_WEIGHT[5],
                     color: palette.accent,
-                    minWidth: 48,
+                    minWidth: SIZE[7],
+                    letterSpacing: LETTER_SPACING[3],
                   }}
                 >
                   {String(i + 1).padStart(2, "0")}

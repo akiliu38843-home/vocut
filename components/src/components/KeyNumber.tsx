@@ -2,10 +2,13 @@ import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { AccentFx, type AccentFxMode } from "../motion/AccentFx";
 import { TextMotion, type TextMotionMode } from "../motion/TextMotion";
-import { FONTS, PALETTES, type Palette } from "../theme";
+import { PALETTES, type Palette } from "../theme";
+import {
+  FONT_SIZE, FONT_STACK, FONT_WEIGHT,
+  LETTER_SPACING, LINE_HEIGHT, SIZE,
+} from "../tokens";
 
 export interface KeyNumberProps {
-  /** The big number, exactly as text. */
   primary: string;
   unit?: string;
   label?: string;
@@ -25,30 +28,27 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
   accent_fx = "none",
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  // Stagger unit + label entries (kept from Phase A behavior).
+  const { fps, width } = useVideoConfig();
+  // 大数字：横屏字号 9（80px），竖屏字号 8（64px）
+  const primarySize = width >= 1280 ? FONT_SIZE[9] : FONT_SIZE[8];
   const unitOpacity = interpolate(frame, [fps * 0.4, fps * 0.7], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const labelOpacity = interpolate(frame, [fps * 0.7, fps * 1.0], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
   const primaryStyle: React.CSSProperties = {
-    fontFamily: FONTS.display,
-    fontSize: "clamp(140px, 18vw, 280px)",
-    fontWeight: 500,
+    fontFamily: FONT_STACK.display,
+    fontSize: primarySize * 1.4,   // KeyNumber 主角，比 title 还大一截
+    fontWeight: FONT_WEIGHT[6],
     color: palette.accent,
-    lineHeight: 1,
-    letterSpacing: -2,
+    lineHeight: LINE_HEIGHT[0],
+    letterSpacing: LETTER_SPACING[0],
+    textShadow: `0 2px 24px ${palette.accent}33`,
   };
 
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
   const primaryEl = isCharMode ? (
-    <span style={primaryStyle}>
-      <TextMotion mode={text_motion} text={primary} />
-    </span>
+    <span style={primaryStyle}><TextMotion mode={text_motion} text={primary} /></span>
   ) : (
-    <TextMotion mode={text_motion}>
-      <span style={primaryStyle}>{primary}</span>
-    </TextMotion>
+    <TextMotion mode={text_motion}><span style={primaryStyle}>{primary}</span></TextMotion>
   );
 
   return (
@@ -59,52 +59,65 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
           flexDirection: "column",
           height: "100%",
           width: "100%",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "center",
-          padding: "0 6%",
+          padding: `0 ${SIZE[10]}px`,
+          gap: SIZE[4],
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
-          <AccentFx mode={accent_fx} palette={palette}>
-            {primaryEl}
-          </AccentFx>
+        {/* 小标签在数字上方 —— 像图表标题 */}
+        {label && (
+          <TextMotion mode="fade">
+            <div
+              style={{
+                fontFamily: FONT_STACK.mono,
+                fontSize: FONT_SIZE[1],
+                fontWeight: FONT_WEIGHT[5],
+                color: palette.textSecondary,
+                letterSpacing: LETTER_SPACING[6],
+                textTransform: "uppercase",
+              }}
+            >
+              {label}
+            </div>
+          </TextMotion>
+        )}
+        {/* 大数字 + 单位 */}
+        <div style={{ display: "flex", alignItems: "baseline", gap: SIZE[3] }}>
+          <AccentFx mode={accent_fx} palette={palette}>{primaryEl}</AccentFx>
           {unit && (
             <span
               style={{
-                fontFamily: FONTS.body,
-                fontSize: "clamp(40px, 5vw, 80px)",
+                fontFamily: FONT_STACK.body,
+                fontSize: primarySize * 0.4,
+                fontWeight: FONT_WEIGHT[3],
                 color: palette.text,
                 opacity: unitOpacity,
-                fontWeight: 300,
               }}
             >
               {unit}
             </span>
           )}
         </div>
-        {label && (
-          <p
-            style={{
-              marginTop: 32,
-              fontFamily: FONTS.body,
-              fontSize: 32,
-              color: palette.textSecondary,
-              textAlign: "center",
-              opacity: labelOpacity,
-            }}
-          >
-            {label}
-          </p>
-        )}
+        {/* 装饰横线 —— 锚在数字下面 */}
+        <div
+          style={{
+            width: SIZE[12],   // 112px 固定窄线
+            height: 2,
+            background: palette.text,
+            opacity: 0.3,
+            marginTop: SIZE[2],
+          }}
+        />
         {secondary && (
           <p
             style={{
-              marginTop: 8,
-              fontFamily: FONTS.mono,
-              fontSize: 22,
+              margin: 0,
+              fontFamily: FONT_STACK.mono,
+              fontSize: FONT_SIZE[1],
               color: palette.quiet,
-              textAlign: "center",
               opacity: labelOpacity,
+              letterSpacing: LETTER_SPACING[3],
             }}
           >
             {secondary}
