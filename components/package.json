@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@react-three/fiber": "^8.18.0",
+    "@remotion/animation-utils": "^4.0.466",
+    "@remotion/captions": "^4.0.466",
     "@remotion/cli": "^4.0.330",
+    "@remotion/layout-utils": "^4.0.466",
     "@remotion/lottie": "^4.0.466",
     "@remotion/three": "^4.0.466",
     "lottie-web": "^5.13.0",
