@@ -66,56 +66,49 @@ export const AccentFx: React.FC<AccentFxProps> = ({
   }
 
   if (mode === "burst") {
-    // 6 radial lines fanning out from the element's center.
+    // Camera-viewfinder corner marks: each of the 4 corners gets a small
+    // L-shaped tick that draws in. Restrained, anchored to the content's
+    // bounding box, never reads as cheap clipart.
     const progress = interpolate(localFrame, [0, dur], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
-    const lineCount = 6;
+    const markSize = 14;        // px of each tick arm
+    const inset = 6;            // px outset from content
+    const corner = (key: string, side: { top?: 0; bottom?: 0; left?: 0; right?: 0 }, rot: number) => (
+      <span
+        key={key}
+        aria-hidden
+        style={{
+          position: "absolute",
+          ...side,
+          width: markSize,
+          height: markSize,
+          opacity: progress * 0.85,
+          transform: `rotate(${rot}deg)`,
+          transformOrigin: "center",
+        }}
+      >
+        <span style={{ position: "absolute", top: 0, left: 0, width: markSize, height: 2, background: palette.accent }} />
+        <span style={{ position: "absolute", top: 0, left: 0, width: 2, height: markSize, background: palette.accent }} />
+      </span>
+    );
     return (
       <span
         style={{
           position: "relative",
           display: "inline-block",
+          paddingTop: inset,
+          paddingBottom: inset,
+          paddingLeft: inset + 2,
+          paddingRight: inset + 2,
           ...style,
         }}
       >
-        <svg
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            width: 360,
-            height: 360,
-            transform: "translate(-50%, -50%)",
-            pointerEvents: "none",
-            opacity: progress * 0.85,
-          }}
-          viewBox="-100 -100 200 200"
-        >
-          {Array.from({ length: lineCount }, (_, i) => {
-            const angle = (i / lineCount) * Math.PI * 2;
-            const innerR = 55;
-            const outerR = 55 + 35 * progress;
-            const x1 = Math.cos(angle) * innerR;
-            const y1 = Math.sin(angle) * innerR;
-            const x2 = Math.cos(angle) * outerR;
-            const y2 = Math.sin(angle) * outerR;
-            return (
-              <line
-                key={i}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke={palette.accent}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-              />
-            );
-          })}
-        </svg>
+        {corner("tl", { top: 0, left: 0 }, 0)}
+        {corner("tr", { top: 0, right: 0 }, 90)}
+        {corner("br", { bottom: 0, right: 0 }, 180)}
+        {corner("bl", { bottom: 0, left: 0 }, 270)}
         <span style={{ position: "relative", zIndex: 1 }}>{children}</span>
       </span>
     );

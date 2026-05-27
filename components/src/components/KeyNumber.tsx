@@ -36,7 +36,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
 
   const primaryStyle: React.CSSProperties = {
     fontFamily: FONT_STACK.display,
-    fontSize: primarySize * 1.4,   // KeyNumber 主角，比 title 还大一截
+    fontSize: primarySize * 1.4,
     fontWeight: FONT_WEIGHT[6],
     color: palette.accent,
     lineHeight: LINE_HEIGHT[0],
@@ -44,11 +44,22 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
     textShadow: `0 2px 24px ${palette.accent}33`,
   };
 
+  // Dedup: if the LLM put the unit into the primary already (e.g. "60亿日元"
+  // + unit="日元"), drop the trailing unit to avoid "60亿日元日元".
+  const cleanUnit = unit && primary.trim().endsWith(unit.trim()) ? undefined : unit;
+
   const isCharMode = text_motion === "typewriter" || text_motion === "wave";
   const primaryEl = isCharMode ? (
     <span style={primaryStyle}><TextMotion mode={text_motion} text={primary} /></span>
   ) : (
     <TextMotion mode={text_motion}><span style={primaryStyle}>{primary}</span></TextMotion>
+  );
+
+  // Underline rule scales with the primary text — wider for short tokens,
+  // narrower for long ones, but never longer than the number itself.
+  const ruleWidth = Math.min(
+    Math.max(primary.length * primarySize * 0.85, primarySize * 1.5),
+    primarySize * 6,
   );
 
   return (
@@ -85,7 +96,7 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
         {/* 大数字 + 单位 */}
         <div style={{ display: "flex", alignItems: "baseline", gap: SIZE[3] }}>
           <AccentFx mode={accent_fx} palette={palette}>{primaryEl}</AccentFx>
-          {unit && (
+          {cleanUnit && (
             <span
               style={{
                 fontFamily: FONT_STACK.body,
@@ -95,14 +106,14 @@ export const KeyNumber: React.FC<KeyNumberProps> = ({
                 opacity: unitOpacity,
               }}
             >
-              {unit}
+              {cleanUnit}
             </span>
           )}
         </div>
-        {/* 装饰横线 —— 锚在数字下面 */}
+        {/* 装饰横线 —— 宽度跟随主文字 */}
         <div
           style={{
-            width: SIZE[12],   // 112px 固定窄线
+            width: ruleWidth,
             height: 2,
             background: palette.text,
             opacity: 0.3,

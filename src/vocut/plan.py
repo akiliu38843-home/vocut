@@ -202,14 +202,16 @@ ACCENT_FX_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "lottie":            ["none", "underline_sweep"],
 }
 ACCENT_FX_AFFINITY_ANIME: dict[str, list[str]] = {
-    # Anime mode leans hard on glow + burst (manga emphasis).
-    "title_card":        ["glow", "burst"],
-    "key_number":        ["burst", "glow"],
-    "pull_quote":        ["glow", "underline_sweep"],
-    "comparison_panel":  ["burst", "glow"],
-    "list_item":         ["underline_sweep", "glow"],
-    "keyword_highlight": ["burst", "glow"],
-    "lottie":            ["glow", "burst"],
+    # Anime leans on glow first. Burst is the camera-viewfinder corner marks
+    # variant — kept for occasional hits on emphatic / quoted scenes, not the
+    # default for data slides where it reads as noise.
+    "title_card":        ["glow", "none"],
+    "key_number":        ["glow", "underline_sweep"],
+    "pull_quote":        ["glow", "burst"],
+    "comparison_panel":  ["glow", "none"],
+    "list_item":         ["underline_sweep", "none"],
+    "keyword_highlight": ["glow", "burst"],
+    "lottie":            ["glow", "none"],
 }
 
 STYLE_PACKS: dict[str, dict[str, Any]] = {
