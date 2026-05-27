@@ -39,8 +39,9 @@ export const LottieCard: React.FC<LottieCardProps> = ({
   text_motion = "fade",
   accent_fx = "none",
 }) => {
-  const { height } = useVideoConfig();
-  const captionSize = Math.round(height * TYPE_RATIO.primary);
+  const { width, height } = useVideoConfig();
+  // Lottie 场景里动画是主角；caption 用 value (5%) 这个"次要主"级别
+  const captionSize = Math.round(height * TYPE_RATIO.value);
   const [animationData, setAnimationData] = useState<LottieAnimationData | null>(null);
   const [handle] = useState(() => delayRender(`lottie:${lottie_id}`));
 
@@ -73,8 +74,32 @@ export const LottieCard: React.FC<LottieCardProps> = ({
 
   return (
     <AbsoluteFill style={{ background: palette.bg }}>
-      <AbsoluteFill style={{ opacity: lottie_opacity }}>
-        <Lottie animationData={animationData} loop />
+      <AbsoluteFill style={{ opacity: lottie_opacity, overflow: "hidden" }}>
+        {/*
+          @remotion/lottie 默认按动画原生尺寸渲染 (800×600 之类). 用 transform
+          scale 让它撑满容器 (cover): 取 max(w_ratio, h_ratio) 保证不留黑边.
+          animationData.w / .h 是 Lottie JSON 里的 composition size.
+        */}
+        {(() => {
+          const animW = (animationData as { w?: number }).w || 1280;
+          const animH = (animationData as { h?: number }).h || 720;
+          const scale = Math.max(width / animW, height / animH);
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: animW,
+                height: animH,
+                transform: `translate(-50%, -50%) scale(${scale})`,
+                transformOrigin: "center",
+              }}
+            >
+              <Lottie animationData={animationData} loop />
+            </div>
+          );
+        })()}
       </AbsoluteFill>
       {captionEl && (
         <AbsoluteFill
