@@ -144,74 +144,93 @@ MOTION_GRAPHIC_COMPONENTS = {
 # Each pack ships its own palette roster + per-component affinity tables.
 # VOCUT_STYLE_PACK=anime switches the active pack at runtime.
 
+# theme.ts 保留全 16 套 palette 定义（素材库不动）。
+# 这里只保留每个 pack 主用的 4 套精选——v0 prompt 的 "3-5 色封顶" 哲学。
+# 主用名单越短，整支视频的视觉一致性越强。
 PALETTE_NAMES_EDITORIAL = [
-    "editorial_dark", "cobalt_data", "warm_paper", "gold_on_black",
-    "minimal_light", "deep_purple", "verdant", "ink_red",
+    "editorial_dark",  # 默认主调，Claude 风格黑底暖琥珀
+    "cobalt_data",     # 数据 / 科技场景
+    "warm_paper",      # 编辑 / 引言场景
+    "minimal_light",   # 明亮场景（少用）
 ]
 PALETTE_NAMES_ANIME = [
-    "sakura", "neon_purple", "mikan", "anime_noir",
-    "matcha", "navy_white", "rose_gold", "dreamy_pastel",
+    "sakura",          # 默认主调，樱粉
+    "neon_purple",     # 高潮场景，霓虹紫
+    "anime_noir",      # 严肃场景，黑金
+    "dreamy_pastel",   # 梦境 / 过渡，粉紫
 ]
+# 其他 8 套 (gold_on_black / deep_purple / verdant / ink_red / mikan /
+# matcha / navy_white / rose_gold) 仍可在 theme.ts 里被手动 prop 显式指定，
+# 但自动分配不再使用它们。
 
+# Editorial: 纯 solid + gradient 两种背景，不再用 shader / particles。
+# v0 prompt 第 § Color "不用渐变 / 不用复杂背景" → vocut 编辑模式守这条。
 BG_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "title_card":        ["gradient", "solid"],
-    "key_number":        ["shader", "particles"],
-    "pull_quote":        ["particles", "shader"],
+    "key_number":        ["solid", "gradient"],
+    "pull_quote":        ["gradient", "solid"],
     "comparison_panel":  ["solid", "gradient"],
-    "list_item":         ["gradient", "solid"],
-    "keyword_highlight": ["particles", "shader"],
+    "list_item":         ["solid", "gradient"],
+    "keyword_highlight": ["gradient", "solid"],
 }
+# Anime: 二次元杂谈允许一个性格背景 (sakura 樱花 / danmaku 弹幕)，但只在主标题 / 引言
+# 等"情绪场景"上用；数据 / 列表保持 solid + gradient 避免干扰阅读。
 BG_AFFINITY_ANIME: dict[str, list[str]] = {
-    # Anime mode swaps in sakura (花瓣) and danmaku (弹幕) bg styles for the
-    # particle-y slots; shader still appears for vaporwave / dramatic key moments.
     "title_card":        ["sakura", "gradient"],
-    "key_number":        ["shader", "sakura"],
-    "pull_quote":        ["sakura", "danmaku"],
-    "comparison_panel":  ["gradient", "danmaku"],
-    "list_item":         ["sakura", "gradient"],
-    "keyword_highlight": ["danmaku", "sakura"],
+    "key_number":        ["solid", "gradient"],
+    "pull_quote":        ["sakura", "gradient"],
+    "comparison_panel":  ["solid", "gradient"],
+    "list_item":         ["solid", "gradient"],
+    "keyword_highlight": ["sakura", "solid"],
 }
+# CardBackground.tsx 仍保留 shader / particles / danmaku 6 种 bg 的实现代码
+# (素材库不动)，但 plan 自动分配不再选 shader / particles / danmaku 这 3 种除非
+# 用户在 plan.json 里手动覆盖。
 
+# 入场动效收敛到 fade + scale_in 两种 (Atlassian Motion "Single focal point"原则)。
+# wave / typewriter 在素材库里仍有实现 (TextMotion.tsx 不动)，但 plan 自动分配只用
+# fade 和 scale_in 来避免 "每帧一种动效" 的混乱节奏。
 TEXT_MOTION_AFFINITY_EDITORIAL: dict[str, list[str]] = {
     "title_card":        ["scale_in", "fade"],
-    "key_number":        ["scale_in", "wave"],
-    "pull_quote":        ["typewriter", "fade"],
+    "key_number":        ["scale_in", "fade"],
+    "pull_quote":        ["fade", "scale_in"],
     "comparison_panel":  ["fade", "scale_in"],
-    "list_item":         ["wave", "fade"],
+    "list_item":         ["fade", "scale_in"],
     "keyword_highlight": ["fade", "scale_in"],
     "lottie":            ["fade", "scale_in"],
 }
 TEXT_MOTION_AFFINITY_ANIME: dict[str, list[str]] = {
-    # Anime mode prefers bouncy + per-char motion (more energy).
-    "title_card":        ["scale_in", "wave"],
-    "key_number":        ["scale_in", "wave"],
-    "pull_quote":        ["typewriter", "wave"],
-    "comparison_panel":  ["wave", "scale_in"],
-    "list_item":         ["wave", "scale_in"],
-    "keyword_highlight": ["typewriter", "wave"],
+    # Anime 允许 scale_in 多一点（活泼感），但仍不用 wave / typewriter
+    "title_card":        ["scale_in", "fade"],
+    "key_number":        ["scale_in", "fade"],
+    "pull_quote":        ["fade", "scale_in"],
+    "comparison_panel":  ["scale_in", "fade"],
+    "list_item":         ["fade", "scale_in"],
+    "keyword_highlight": ["scale_in", "fade"],
     "lottie":            ["scale_in", "fade"],
 }
 
+# AccentFx 极简：默认 none，只在 keyword_highlight 才允许 glow (Refactoring UI
+# "less decoration" + Atlassian "single focal point")。burst (取景器角标) 仍在
+# AccentFx.tsx 里 (素材库不动)，但 plan 不再自动选——它是手动场景才用的。
 ACCENT_FX_AFFINITY_EDITORIAL: dict[str, list[str]] = {
-    "title_card":        ["underline_sweep", "none"],
-    "key_number":        ["glow", "burst"],
-    "pull_quote":        ["none", "glow"],
-    "comparison_panel":  ["none", "underline_sweep"],
-    "list_item":         ["none", "underline_sweep"],
-    "keyword_highlight": ["underline_sweep", "glow"],
-    "lottie":            ["none", "underline_sweep"],
+    "title_card":        ["none", "none"],
+    "key_number":        ["none", "glow"],
+    "pull_quote":        ["none", "none"],
+    "comparison_panel":  ["none", "none"],
+    "list_item":         ["none", "none"],
+    "keyword_highlight": ["glow", "none"],
+    "lottie":            ["none", "none"],
 }
 ACCENT_FX_AFFINITY_ANIME: dict[str, list[str]] = {
-    # Anime leans on glow first. Burst is the camera-viewfinder corner marks
-    # variant — kept for occasional hits on emphatic / quoted scenes, not the
-    # default for data slides where it reads as noise.
+    # Anime 比 editorial 稍狂躁，允许 glow 多一点但不用 burst (太抢戏)
     "title_card":        ["glow", "none"],
-    "key_number":        ["glow", "underline_sweep"],
-    "pull_quote":        ["glow", "burst"],
-    "comparison_panel":  ["glow", "none"],
-    "list_item":         ["underline_sweep", "none"],
-    "keyword_highlight": ["glow", "burst"],
-    "lottie":            ["glow", "none"],
+    "key_number":        ["glow", "none"],
+    "pull_quote":        ["none", "glow"],
+    "comparison_panel":  ["none", "glow"],
+    "list_item":         ["none", "none"],
+    "keyword_highlight": ["glow", "none"],
+    "lottie":            ["none", "glow"],
 }
 
 STYLE_PACKS: dict[str, dict[str, Any]] = {
@@ -595,34 +614,152 @@ def topk_candidates(
 # LLM rerank (Claude tool use → structured output)
 # -----------------------------------------------------------------------------
 
-LLM_SYSTEM_PROMPT = """You align voiceover script sentences to footage clips for a knowledge video.
+LLM_SYSTEM_PROMPT = """你是 vocut 的"视频编辑导演"，把配音稿和素材库映射到一支视频每一帧的设计。
 
-For each sentence, choose ONE of:
-  - footage:        the clip semantically fits (confidence >= 0.6)
-  - motion_graphic: no clip fits well → use a component instead
-  - hybrid:         clip works but should carry an animated overlay (e.g. clip + key_number)
+vocut 把视频拆成一连串「场景 (scene)」，每个场景对应配音稿里的一句话。你的工作是
+为每一句决定它的视觉形态，遵守下方的硬规则——这些规则提炼自 v0 (Vercel)、Material
+Design、IBM Carbon、BBC GEL、Refactoring UI 等开源设计系统的共识。
 
-Motion-graphic components (pick whichever fits the sentence semantics):
-  - key_number       numbers, dates, durations, percentages, version IDs
-  - pull_quote       direct quotes, mottos, italicized sayings, maxims,
-                     aphorisms, OR any sentence that reads like a quoted
-                     truth even when no "" 「」 marks are present
-                     (e.g. "X 的 Y，N 成花在你看不见的地方")
-  - title_card       section transitions, chapter markers
-  - comparison_panel explicit comparisons (A vs B, before vs after, multi-region)
-  - list_item        enumerated items ("首先/其次", "第一/第二", "A、B、C")
-  - keyword_highlight generic short emphatic statements WITH a clear keyword to highlight
-  - lottie           atmospheric / illustrative scene with no specific structural element —
-                     a designer-made animation carries the visual, your caption sits on top.
-                     Use it for transitional / mood sentences ("镜头转到…", "故事的开端是…",
-                     抽象比喻 / 氛围铺垫 / 没有具体数字或列表的过渡句).
-                     When picking lottie, also set `lottie_tag` to ONE of these themes
-                     so the right animation gets chosen:
-                       abstract | data | nature | organic | minimal | particles |
-                       lights | festive | celebration | character | scifi | header
+═══════════════════════════════════════════════════════════════════════════
+§ A 场景类型选择 (TYPE)
+═══════════════════════════════════════════════════════════════════════════
 
-Be honest with confidence. If no candidate is a good match AND no structural component
-(number/quote/list/comparison) fits, prefer lottie over keyword_highlight for variety.
+每个句子三选一：
+  - footage         候选 footage 跟句子语义相符 (置信度 ≥ 0.6)
+  - motion_graphic  没合适 footage → 用文字 / 图形组件画出来
+  - hybrid          footage 半合适，再叠一个文字图形 (例: 数据画面 + key_number 数字)
+
+诚实给 confidence。如果候选都不像，**直接给 motion_graphic**，不要硬挑。
+
+═══════════════════════════════════════════════════════════════════════════
+§ B 组件选择 (COMPONENT)
+═══════════════════════════════════════════════════════════════════════════
+
+motion_graphic / hybrid 时挑一个组件——按句子的"信息类型"挑，不要凭手感：
+
+  ① key_number        含明确数字 / 日期 / 时长 / 百分比 / 版本号 / 排名
+                      → "175 ZB" / "2026 年 Q4" / "47 名" / "60 亿日元" / "前 30"
+  ② pull_quote        引用、警句、格言、有引号的话、有"被引用感"的箴言
+                      → "AI 不会取代人，但用 AI 的人会"
+                      → "精品咖啡的成本，八成花在你看不见的地方"
+                      （注意：箴言不一定有"" 「」标点也算）
+  ③ title_card        章节过场、阶段标题、章节宣告
+                      → 章节切换处由 plan.py 自动插入，你不用主动选这个
+  ④ comparison_panel  显式对比 (A vs B、前后、左右、左侧右侧)
+                      → "苹果押注端侧，谷歌押注云端"
+                      → "公测 vs 当下"
+  ⑤ list_item         明确的枚举 ("首先/其次" / "第一/第二" / 顿号分隔的并列项)
+                      → "种植、采摘、处理、烘焙、冲煮"
+                      → "三个关键趋势..."
+  ⑥ keyword_highlight 短句强调，有一个关键词需要高亮
+                      → "AI 不会停下来"
+                      → "他做到了——单凭一己之力"
+  ⑦ lottie            氛围 / 抽象 / 过渡句 (没具体数字、引言、对比、列表)
+                      → "故事的开端是..." / "镜头转到一个安静的下午"
+                      → "这是一个被忽略了二十年的问题"
+                      → 用此组件时**必须**给 lottie_tag (见 § B.7)
+
+§ B.7  lottie_tag 集合（picking lottie 时必填）：
+  abstract  data  nature  organic  minimal  particles  lights
+  festive   celebration  character  scifi  header
+
+§ B 决策树（按顺序问，第一个 YES 的就是答案）：
+  1. 句子里有数字、日期、版本号或排名? → key_number
+  2. 句子是引用、警句、有"格言"感? → pull_quote
+  3. 句子是 A vs B 的对比? → comparison_panel
+  4. 句子是 3 个或更多并列项? → list_item
+  5. 句子很短 + 有 1 个关键词值得高亮? → keyword_highlight
+  6. 句子是抽象的过渡、氛围、铺垫? → lottie
+  7. 都不像 → keyword_highlight（默认兜底）
+
+**禁止**：因为相邻几句都是 lottie 就强行换成 keyword_highlight 凑多样。按句子真实
+含义挑，多样性由 vocut 后处理自动调。
+
+═══════════════════════════════════════════════════════════════════════════
+§ C 颜色系统 (来自 v0 prompt + WCAG)
+═══════════════════════════════════════════════════════════════════════════
+
+**vocut 的 palette 已经预设了** (editorial_dark / cobalt_data / warm_paper /
+sakura / neon_purple 等)，你不直接挑颜色。但是你需要理解：
+
+  ① 一支视频每个场景最多 3 个颜色（背景 + 主文字 + 1 accent）
+  ② accent 颜色每场景**只用一次**——在主焦点上
+  ③ 永远满足 WCAG AA：正文 4.5:1，大字 3:1
+  ④ 不用渐变（除非作为微妙的 accent，不能用于主背景）
+  ⑤ 不混冷暖（红→青、橘→蓝禁忌组合）
+
+如果你看到 reference 图（vision 提取的），按它的色相提示场景配色。
+
+═══════════════════════════════════════════════════════════════════════════
+§ D 排版 (来自 v0 + BBC GEL + Butterick)
+═══════════════════════════════════════════════════════════════════════════
+
+vocut 已经预设了字体三件套和字号阶梯，你不直接调字号。但你需要理解：
+
+  ① 主标题 / hero text   = 屏幕高度 9-12% (Vox / Kurzgesagt 行业标准)
+  ② 大数字 hero number   = 屏幕高度 14-16% (key_number 主角)
+  ③ 引言 / 关键词        = 屏幕高度 5-6%
+  ④ 列表项 / 对比项      = 屏幕高度 4-5%
+  ⑤ 监督文字 / 标签      = 屏幕高度 1.4-1.6%
+
+**写 props 时尽量短**：
+  - title_card 主标题：≤ 15 个汉字 / 30 个拉丁字符
+  - pull_quote 引言：≤ 30 个汉字 / 60 个拉丁字符
+  - keyword_highlight text：≤ 25 个汉字 (要能在一行内显示)
+  - list_item 单项：≤ 12 个汉字
+  - key_number primary：≤ 8 个字符（"60 亿日元" / "2026 年" / "175 ZB" / "47 名")
+  - key_number unit：1-3 字符 ("ZB" / "亿日元" / "%")
+  - **重要**：如果 primary 字段已经包含单位（如 "60 亿日元"），unit 字段就**留空**，
+              不要重复
+
+═══════════════════════════════════════════════════════════════════════════
+§ E 版式与对齐 (来自 v0 prompt + Refactoring UI)
+═══════════════════════════════════════════════════════════════════════════
+
+vocut 组件已经定好了版式，但你要理解一个总原则：
+
+  - 每个场景**单一焦点** (Single focal point)：一个主元素抢眼，其他静默
+  - 每个场景**最多 1 个装饰** (除主文字 + 必要 label 外)
+  - 留白比装饰更重要 (Refactoring UI 3)
+  - 装饰必须锚定具体内容 (不能浮空)
+
+═══════════════════════════════════════════════════════════════════════════
+§ F 风格判断框架 (来自 v0 Creative Decision Framework)
+═══════════════════════════════════════════════════════════════════════════
+
+根据脚本性质切换创作激进度：
+
+  脚本类型              → 风格策略                  → 建议组件偏好
+  ─────────────────────────────────────────────────────────────────
+  数据 / 财经 / 科技    → BE CONSERVATIVE          → key_number 多用
+                                                    → bg_style: solid > gradient
+                                                    → 颜色: cobalt_data / editorial_dark
+  ─────────────────────────────────────────────────────────────────
+  二次元 / B 站杂谈     → BE EXPERIMENTAL          → keyword_highlight + lottie 多用
+                                                    → bg_style: sakura / 渐变
+                                                    → 颜色: sakura / neon_purple
+  ─────────────────────────────────────────────────────────────────
+  知识 / 编辑型         → BE RESPECTFUL            → 7 组件均衡用
+                                                    → bg_style: gradient / solid
+                                                    → 颜色: warm_paper / editorial_dark
+  ─────────────────────────────────────────────────────────────────
+  个人 / 创意           → BE BOLD                  → pull_quote + lottie 多用
+                                                    → bg_style: shader / particles
+                                                    → 颜色: 大胆撞色
+
+  **Final Rule**: Ship something interesting rather than boring, but never ugly.
+
+═══════════════════════════════════════════════════════════════════════════
+§ G 反则（绝对不允许）
+═══════════════════════════════════════════════════════════════════════════
+
+  ❌ 主文字超 30 汉字 / 60 拉丁字符 (会折行 + 视觉拥堵)
+  ❌ key_number primary 含单位时再填 unit (会出 "60 亿日元日元")
+  ❌ pull_quote 引用了一个不存在于句子的"被引用对象"（不要瞎编 attribution）
+  ❌ comparison_panel 只放 1 个 item (那是 keyword_highlight 的活)
+  ❌ list_item items 数量 ≤ 1 (同上)
+  ❌ 给 lottie 不给 lottie_tag
+  ❌ 凭多样性强行换组件 (按句意挑，多样性后处理自动管)
 """
 
 RERANK_TOOL = {
@@ -709,13 +846,14 @@ def rerank_with_anthropic(
     candidates: list[dict[str, Any]],
     section: dict[str, Any] | None,
     model: str,
+    system_prompt: str | None = None,
 ) -> dict[str, Any]:
     """One Claude call (Anthropic API) to pick the best match."""
     user_msg = _format_user_msg(sentence, candidates, section)
     response = client.messages.create(
         model=model,
         max_tokens=1024,
-        system=LLM_SYSTEM_PROMPT,
+        system=system_prompt or LLM_SYSTEM_PROMPT,
         tools=[RERANK_TOOL],
         tool_choice={"type": "tool", "name": "select_match"},
         messages=[{"role": "user", "content": user_msg}],
@@ -732,6 +870,7 @@ def rerank_with_openai(
     candidates: list[dict[str, Any]],
     section: dict[str, Any] | None,
     model: str,
+    system_prompt: str | None = None,
 ) -> dict[str, Any]:
     """One OpenAI-compatible call to pick the best match.
 
@@ -751,7 +890,7 @@ def rerank_with_openai(
         model=model,
         max_tokens=1024,
         messages=[
-            {"role": "system", "content": LLM_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt or LLM_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
         tools=[openai_tool],
@@ -999,6 +1138,60 @@ def _try_load_llm_client() -> tuple[Any, str] | tuple[None, None]:
     return None, None
 
 
+def describe_visual_reference(image_path: Path, model: str | None = None) -> str | None:
+    """Ask a vision LLM to extract a 'design style description' from a reference
+    image. The output gets injected into LLM_SYSTEM_PROMPT so plan decisions
+    take the reference's vibe into account.
+
+    Modeled on tldraw/make-real's "wireframe → polished HTML" bridge pattern.
+    Returns a 3-5 sentence Chinese description or None if anything fails.
+    """
+    if not image_path.exists():
+        return None
+    api_key = os.environ.get("VOCUT_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("VOCUT_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    if not api_key:
+        return None
+
+    try:
+        import base64
+        import openai
+        b64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        ext = image_path.suffix.lstrip(".").lower() or "jpeg"
+        if ext == "jpg":
+            ext = "jpeg"
+        client = openai.OpenAI(
+            api_key=api_key,
+            **({"base_url": base_url} if base_url else {}),
+        )
+        default_model = "gpt-5.4-mini" if (base_url and "openai.com" not in base_url) else "gpt-4o"
+        chosen = model or os.environ.get("VOCUT_VISION_MODEL") or default_model
+        resp = client.chat.completions.create(
+            model=chosen,
+            max_tokens=400,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": (
+                        "你是 vocut 的设计参考分析师。这张图是用户给的'希望视频长成这样'的视觉参考。\n\n"
+                        "用 3-5 句中文，给后续的设计决策者一份'风格档案'，覆盖：\n"
+                        "1. 主色调（暖 / 冷 / 黑白 / 鲜艳 / 低饱和）\n"
+                        "2. 字体风格（衬线 / 无衬线 / 手写 / 厚重 / 纤细）\n"
+                        "3. 版式特征（居中 / 左对齐 / 留白多少 / 装饰多少）\n"
+                        "4. 整体情绪（编辑感 / 二次元 / 商业 / 创意 / 怀旧）\n"
+                        "5. 一句话总结风格定位\n\n"
+                        "不要逐字描述图里有什么；提炼**风格特征**就好。"
+                    )},
+                    {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{b64}"}},
+                ],
+            }],
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        return text if text and "NO_CONTENT" not in text else None
+    except Exception:
+        return None
+
+
 def plan(
     script_path: Path,
     db_path: Path,
@@ -1008,11 +1201,15 @@ def plan(
     topk: int = DEFAULT_TOPK,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
     use_llm: bool | None = None,
+    reference_image: Path | None = None,
     progress_callback=None,
 ) -> dict[str, Any]:
     """Generate plan.json. Returns stats dict.
 
     use_llm=None (default) auto-detects ANTHROPIC_API_KEY.
+    reference_image: optional path to an inspiration image; if given, vocut
+    asks a vision LLM to describe its style and injects that description
+    into the system prompt so plan decisions align with it.
     """
     sentences = parse_script(script_path.read_text())
     if not sentences:
@@ -1058,6 +1255,26 @@ def plan(
         dtype=np.float32,
     )
 
+    # 视觉参考接入 (make-real 启发): 用户给了 --reference 图，调 vision LLM
+    # 出风格描述，预拼接到 system prompt 前。
+    reference_description: str | None = None
+    effective_system_prompt = LLM_SYSTEM_PROMPT
+    if reference_image and reference_image.exists():
+        if progress_callback:
+            progress_callback({"phase": "reference_describe", "image": str(reference_image)})
+        reference_description = describe_visual_reference(reference_image)
+        if reference_description:
+            effective_system_prompt = (
+                "═══════════════════════════════════════════════════════════════\n"
+                "§ R 用户提供的视觉参考 (优先级最高)\n"
+                "═══════════════════════════════════════════════════════════════\n\n"
+                f"{reference_description}\n\n"
+                "**根据这份风格档案调整你的所有决策**：组件选择、置信度、是否选 lottie。"
+                "如果场景的内容明显跟参考的氛围不搭, 偏向选择能贴合参考视觉的组件。\n\n"
+                "═══════════════════════════════════════════════════════════════\n\n"
+                + LLM_SYSTEM_PROMPT
+            )
+
     plan_items: list[dict[str, Any]] = []
     stats_match_types: dict[str, int] = {"footage": 0, "motion_graphic": 0, "hybrid": 0}
 
@@ -1098,7 +1315,8 @@ def plan(
                 rerank_with_openai if provider == "openai" else rerank_with_anthropic
             )
             match = rerank_fn(
-                client, s["text"], candidates, s.get("section"), llm_model
+                client, s["text"], candidates, s.get("section"), llm_model,
+                system_prompt=effective_system_prompt,
             )
         else:
             match = heuristic_pick(s["text"], s.get("section"), candidates, confidence_threshold)
@@ -1144,6 +1362,8 @@ def plan(
             "confidence_threshold": confidence_threshold,
             "topk": topk,
             "style": style_stats,
+            "reference_image": str(reference_image.resolve()) if reference_image else None,
+            "reference_description": reference_description,
         },
         "plan": plan_items,
     }

@@ -124,12 +124,19 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     output_path = Path(args.out).resolve() if args.out else Path("plan.json").resolve()
     llm_model = args.llm_model or DEFAULT_LLM_MODEL
 
+    reference_image = Path(args.reference).resolve() if args.reference else None
+    if reference_image and not reference_image.exists():
+        print(f"error: reference image not found: {reference_image}", file=sys.stderr)
+        return 2
+
     def progress(event: dict) -> None:
         phase = event.get("phase")
         if phase == "load_embedder":
             print(f"  loading embedder: {event['model']}", file=sys.stderr)
         elif phase == "embed_script":
             print(f"  embedding {event['n']} sentences", file=sys.stderr)
+        elif phase == "reference_describe":
+            print(f"  reading style from reference: {event['image']}", file=sys.stderr)
         elif phase == "match":
             print(
                 f"  [{event['i']}/{event['total']}] matching "
@@ -145,6 +152,7 @@ def _cmd_plan(args: argparse.Namespace) -> int:
         topk=args.topk,
         confidence_threshold=args.threshold,
         use_llm=False if args.no_llm else None,
+        reference_image=reference_image,
         progress_callback=progress,
     )
     print(json.dumps(stats, indent=2, ensure_ascii=False))
@@ -276,6 +284,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-llm",
         action="store_true",
         help="Force heuristic mode even if ANTHROPIC_API_KEY is set",
+    )
+    p_plan.add_argument(
+        "--reference",
+        help=(
+            "Path to a reference image (PNG/JPG). vocut asks a vision LLM to "
+            "describe its style and injects that description into the system "
+            "prompt so plan decisions align with the reference's vibe."
+        ),
     )
 
     p_render = sub.add_parser("render", help="Render plan.json into final mp4")
