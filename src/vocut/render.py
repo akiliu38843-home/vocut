@@ -447,6 +447,89 @@ def _probe_aspect(path: Path) -> float | None:
 # -----------------------------------------------------------------------------
 
 
+# vocut transition kind → ffmpeg xfade preset name
+# 来源: transitions-charter.md §2, 只允许 4 种
+XFADE_PRESET = {
+    "none": "fade",       # 1 帧的 fade 视觉等于硬切
+    "fade": "fade",
+    "slide": "slideleft",
+    "dissolve": "dissolve",
+}
+
+
+def concat_with_transitions(
+    segments: list[Path],
+    transitions: list[dict[str, Any]],
+    out_mp4: Path,
+    fps: int = DEFAULT_FPS,
+) -> Path:
+    """Concat segments using ffmpeg xfade between adjacent pairs.
+
+    transitions[i] applies between segments[i] and segments[i+1], so
+    len(transitions) must be len(segments) - 1.
+
+    Each transition dict: {kind: "fade"|"slide"|"dissolve"|"none", duration_frames: int}
+    "none" still uses xfade but with duration = 1 frame, which is visually a
+    hard cut (xfade requires duration > 0).
+    """
+    if not segments:
+        raise ValueError("no segments")
+    if len(segments) == 1:
+        shutil.copyfile(segments[0], out_mp4)
+        return out_mp4
+    if len(transitions) != len(segments) - 1:
+        raise ValueError(
+            f"transitions count ({len(transitions)}) must be segments-1 ({len(segments) - 1})"
+        )
+
+    # Probe each segment's duration so we can compute cumulative xfade offsets.
+    seg_durs: list[float] = []
+    for s in segments:
+        d = _probe_duration(s)
+        if d is None or d <= 0:
+            raise RuntimeError(f"failed to probe duration: {s}")
+        seg_durs.append(d)
+
+    # Build the filter_complex chain. ffmpeg xfade syntax:
+    #   [0][1]xfade=transition=fade:duration=0.5:offset=4.5[v01];
+    #   [v01][2]xfade=transition=slide:duration=0.83:offset=8.67[v012];
+    parts: list[str] = []
+    prev_label = "[0:v:0]"
+    cumulative = 0.0  # ends-of-current-chain in seconds
+    for i, trans in enumerate(transitions):
+        kind = trans.get("kind", "fade")
+        dur_frames = max(1, int(trans.get("duration_frames", 18)))
+        if kind == "none":
+            dur_frames = 1
+        dur_sec = dur_frames / fps
+        preset = XFADE_PRESET.get(kind, "fade")
+        # offset = sum of prior segment durations minus prior transition durations
+        # (since each xfade overlaps two segments)
+        if i == 0:
+            cumulative = seg_durs[0]
+        offset = cumulative - dur_sec
+        next_label = f"[v{i}]" if i < len(transitions) - 1 else "[outv]"
+        parts.append(
+            f"{prev_label}[{i + 1}:v:0]xfade="
+            f"transition={preset}:duration={dur_sec:.3f}:offset={offset:.3f}{next_label}"
+        )
+        cumulative = cumulative + seg_durs[i + 1] - dur_sec
+        prev_label = next_label
+
+    cmd = [_ffmpeg_bin(), "-y", "-loglevel", "error"]
+    for s in segments:
+        cmd.extend(["-i", str(s)])
+    cmd.extend([
+        "-filter_complex", ";".join(parts),
+        "-map", "[outv]",
+        "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+        "-an",
+        str(out_mp4),
+    ])
+    _run(cmd)
+    return out_mp4
+
+
 def concat_segments(segments: list[Path], out_mp4: Path) -> Path:
     """Concat via the concat filter (re-encode for stream-uniformity safety)."""
     if not segments:
@@ -715,7 +798,27 @@ def render(
         if progress_callback:
             progress_callback({"phase": "concat", "n": len(segments)})
         concat_path = work_dir / "concat.mp4"
-        concat_segments(segments, concat_path)
+
+        # Build per-pair transition list from plan items (plan.py wrote
+        # transition_to_next on each item except the last).
+        # vocut transitions charter §3:
+        #   none: 0 → 1 frame  /  fade: 18 frames  /  slide: 25 frames  /  dissolve: 18 frames
+        from vocut.plan import TRANSITION_DURATION_FRAMES
+        transitions: list[dict[str, Any]] = []
+        for i in range(len(items) - 1):
+            # Only consider items that actually rendered a segment.
+            if i + 1 > len(segments) - 1:
+                break
+            kind = items[i].get("transition_to_next") or "fade"
+            transitions.append({
+                "kind": kind,
+                "duration_frames": TRANSITION_DURATION_FRAMES.get(kind, 18),
+            })
+
+        if transitions and len(segments) > 1:
+            concat_with_transitions(segments, transitions, concat_path, fps=fps)
+        else:
+            concat_segments(segments, concat_path)
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if voiceover or music:

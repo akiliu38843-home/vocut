@@ -264,6 +264,79 @@ TEXT_MOTION_AFFINITY = TEXT_MOTION_AFFINITY_EDITORIAL
 ACCENT_FX_AFFINITY = ACCENT_FX_AFFINITY_EDITORIAL
 
 
+# ─── Transitions ────────────────────────────────────────────────────────────
+# 转场设计宪法 docs/research/methodology/transitions-charter.md
+# vocut 只用 4 种 (其他 14 种 @remotion/transitions presentations 禁用):
+#   none      硬切, 0 帧
+#   fade      默认转场, 15-20 帧 (0.5-0.67s)
+#   slide     章节切换专用, 20-30 帧
+#   dissolve  跟 fade 类似, 更柔
+TRANSITION_DURATION_FRAMES = {
+    "none": 0,
+    "fade": 18,
+    "slide": 25,
+    "dissolve": 18,
+}
+
+
+def _assign_transitions(plan_items: list[dict[str, Any]]) -> dict[str, int]:
+    """给每个 scene 加 transition_to_next 字段, 按转场宪法 §6 规则:
+      - 当前是 title_card → 接下来用 slide (章节切换感)
+      - 下一段是 title_card → 用 slide (准备进章节)
+      - 当前是 lottie → fade (温柔过渡)
+      - 同类型 footage→footage 衔接 → none (硬切保节奏)
+      - 类型差异大 → fade (默认)
+    一致性约束:
+      - 整支 slide 总次数 ≤ title_card 数量
+      - 整支 none 总次数 ≤ 总场景 30%
+    最后一个 scene 不带 transition_to_next.
+    """
+    stats = {"fade": 0, "slide": 0, "none": 0, "dissolve": 0}
+    total = len(plan_items)
+    title_count = sum(1 for it in plan_items if _scene_kind(it) == "title_card")
+    max_none = max(1, int(total * 0.3))
+
+    def _comp(item: dict[str, Any]) -> str:
+        m = item.get("match", {})
+        if m.get("type") == "motion_graphic":
+            return m.get("component", "")
+        if m.get("type") == "hybrid" and isinstance(m.get("overlay"), dict):
+            return m["overlay"].get("component", "")
+        return ""
+
+    for i, item in enumerate(plan_items[:-1]):
+        cur_kind = _scene_kind(item)
+        next_kind = _scene_kind(plan_items[i + 1])
+        cur_comp = _comp(item)
+        next_comp = _comp(plan_items[i + 1])
+
+        # 章节切换 → slide
+        if cur_comp == "title_card" or next_comp == "title_card":
+            chosen = "slide"
+        # lottie → fade
+        elif cur_comp == "lottie" or next_comp == "lottie":
+            chosen = "fade"
+        # 同类型连续 footage → 硬切保节奏 (但不超 30%)
+        elif cur_kind == "footage" and next_kind == "footage" and stats["none"] < max_none:
+            chosen = "none"
+        else:
+            chosen = "fade"
+
+        item["transition_to_next"] = chosen
+        stats[chosen] += 1
+
+    return stats
+
+
+def _scene_kind(item: dict[str, Any]) -> str:
+    """Return one of {footage, motion_graphic, hybrid, title_card}."""
+    m = item.get("match", {})
+    t = m.get("type", "motion_graphic")
+    if t == "motion_graphic" and m.get("component") == "title_card":
+        return "title_card"
+    return t
+
+
 def _stamp_scene_metadata(plan_items: list[dict[str, Any]]) -> None:
     """Write scene_idx / total_scenes / section_label / style_pack onto each
     motion-graphic (and hybrid-overlay) target. SceneFrame in the Remotion
@@ -1350,6 +1423,10 @@ def plan(
     # up with the rendered scene list).
     _stamp_scene_metadata(plan_items)
 
+    # Assign scene-to-scene transitions per the transitions charter
+    # (docs/research/methodology/transitions-charter.md).
+    transition_stats = _assign_transitions(plan_items)
+
     plan_doc = {
         "meta": {
             "script_path": str(script_path.resolve()),
@@ -1362,6 +1439,7 @@ def plan(
             "confidence_threshold": confidence_threshold,
             "topk": topk,
             "style": style_stats,
+            "transitions": transition_stats,
             "reference_image": str(reference_image.resolve()) if reference_image else None,
             "reference_description": reference_description,
         },
