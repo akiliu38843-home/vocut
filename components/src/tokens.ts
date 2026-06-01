@@ -107,3 +107,53 @@ export const FONT_STACK = {
   mono:
     '"IBM Plex Mono", "JetBrains Mono", "SF Mono", Menlo, Consolas, ui-monospace, monospace',
 } as const;
+
+// ─── 动画 token (Phase W.1) ────────────────────────────────────────────────
+//
+// 数字来源 (调研可对照):
+//   - Material Design 3   : stagger 40-120ms, 4 缓动曲线, 4 时长 token
+//                          https://m3.material.io/styles/motion/easing-and-duration/tokens-specs
+//   - Apple HIG Motion    : 200-400ms 标准, spring damping 0.7-1.0
+//                          https://developer.apple.com/design/human-interface-guidelines/motion
+//   - Nielsen Norman Group: sequence 2-5 物 300-400ms, 6-10 物 500-700ms
+//                          https://www.nngroup.com/articles/animation-duration/
+//
+// 视频系数 ×1.5: UI 这些数字是给"用户看屏幕主动操作"用的, vocut 是观众**被动**看视频,
+// 节奏要比 UI 慢 1.5 倍 (跟 transitions-charter.md §3 同标尺).
+//
+// 详见 docs/research/methodology/research-to-code-map.md §II.A
+
+// 单位 ms - 单次动作 / 切换的持续时间
+export const MOTION_DURATION = {
+  instant: 100,     // 不到一眼, 几乎察觉不到
+  fast: 300,        // 小元素出场 (Apple HIG 200 × 1.5)
+  base: 500,        // 标准 (Apple HIG 300 × 1.5 ≈ NN/G sequence 2-5 物上限)
+  slow: 800,        // 强调用 (Apple HIG <500 × 1.5)
+  transition: 1200, // 场景级 (NN/G page transition 800 × 1.5)
+} as const;
+
+// 单位 ms - 父子元素 / 列表项之间排队间隔
+export const MOTION_STAGGER = {
+  tight: 80,        // 字与字 (Material 40 × 1.5 ≈ CMU 中文按字下限)
+  normal: 120,      // 列表项 (Material 80 × 1.5 = vocut 默认 list stagger)
+  loose: 180,       // 段落 / 大块 (Material 120 × 1.5)
+} as const;
+
+// Material Design 3 标准 4 缓动曲线 (cubic-bezier 控制点)
+// 给 framer-motion / motion 用: animate={{ transition: { ease: MOTION_EASE.standard } }}
+export const MOTION_EASE = {
+  standard:   [0.2, 0, 0, 1],     // Material 默认: 通用 (本对本用)
+  decelerate: [0, 0, 0.2, 1],     // 进入: 进场用 (东西从无到有)
+  accelerate: [0.3, 0, 1, 1],     // 退出: 离场用 (东西从有到无)
+  sharp:      [0.4, 0, 0.6, 1],   // 短切换: 临时元素 (toast / hover)
+} as const;
+
+// Apple HIG spring physics 配置
+// 给 motion 用: <motion.div animate={{ x: 100 }} transition={MOTION_SPRING.gentle} />
+//
+// stiffness: 弹簧刚度, 越高越硬 (Apple 推荐 80-200)
+// damping:   阻尼, 越高越快停 (Apple 推荐 12-20, damping/stiffness ≈ 0.07-0.1 对应 damping ratio 0.7-1.0)
+export const MOTION_SPRING = {
+  gentle: { type: "spring", stiffness: 120, damping: 14 } as const,  // 默认: 柔和过渡
+  snappy: { type: "spring", stiffness: 200, damping: 12 } as const,  // 灵动: 弹一下 (Bounce-In)
+} as const;

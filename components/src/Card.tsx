@@ -23,7 +23,21 @@ import { ListItem } from "./components/ListItem";
 import { LottieCard } from "./components/LottieCard";
 import { PullQuote } from "./components/PullQuote";
 import { TitleCard } from "./components/TitleCard";
+import {
+  DynamicConceptMap,
+  DynamicHighlight,
+  DynamicList,
+  DynamicNumber,
+  DynamicQuote,
+} from "./components-dynamic";
 import { resolvePalette } from "./theme";
+
+// Phase W.4: 动态版组件总开关. 默认 ON (走 Dynamic), env VOCUT_STATIC=1 走老组件回退.
+// vocut Python 渲染时通过 `--env VOCUT_STATIC=1` 传给 Remotion CLI.
+const USE_DYNAMIC =
+  typeof process !== "undefined"
+    ? process.env.VOCUT_STATIC !== "1"
+    : true;
 
 export const cardSchema = z.object({
   component: z.enum([
@@ -34,6 +48,7 @@ export const cardSchema = z.object({
     "list_item",
     "keyword_highlight",
     "lottie",
+    "concept_map",
   ]),
   /** Component-specific props. Permissive at the schema level. */
   props: z.record(z.string(), z.any()).optional(),
@@ -98,6 +113,18 @@ export const Card: React.FC<CardProps> = ({
           />
         );
       case "key_number":
+        if (USE_DYNAMIC) {
+          return (
+            <DynamicNumber
+              primary={(p.primary as string) ?? "?"}
+              unit={p.unit as string | undefined}
+              label={p.label as string | undefined}
+              secondary={p.secondary as string | undefined}
+              palette={motion.palette}
+              durationMs={p.duration_ms as number | undefined}
+            />
+          );
+        }
         return (
           <KeyNumber
             primary={(p.primary as string) ?? "?"}
@@ -108,6 +135,16 @@ export const Card: React.FC<CardProps> = ({
           />
         );
       case "pull_quote":
+        if (USE_DYNAMIC) {
+          return (
+            <DynamicQuote
+              quote={(p.quote as string) ?? sentence ?? "—"}
+              attribution={p.attribution as string | undefined}
+              palette={motion.palette}
+              staggerMs={p.stagger_ms as number | undefined}
+            />
+          );
+        }
         return (
           <PullQuote
             quote={(p.quote as string) ?? sentence ?? "—"}
@@ -141,6 +178,18 @@ export const Card: React.FC<CardProps> = ({
       }
       case "list_item": {
         const items = (p.items as string[]) ?? (sentence ? [sentence] : ["?"]);
+        if (USE_DYNAMIC) {
+          return (
+            <DynamicList
+              items={items}
+              label={p.label as string | undefined}
+              style={p.style as "decimal" | "none" | undefined}
+              palette={motion.palette}
+              staggerMs={p.stagger_ms as number | undefined}
+              itemDurationMs={p.item_duration_ms as number | undefined}
+            />
+          );
+        }
         return (
           <ListItem
             items={items}
@@ -151,6 +200,16 @@ export const Card: React.FC<CardProps> = ({
         );
       }
       case "keyword_highlight":
+        if (USE_DYNAMIC) {
+          return (
+            <DynamicHighlight
+              text={(p.text as string) ?? sentence ?? "?"}
+              highlight={p.highlight as string | undefined}
+              palette={motion.palette}
+              staggerMs={p.stagger_ms as number | undefined}
+            />
+          );
+        }
         return (
           <KeywordHighlight
             text={(p.text as string) ?? sentence ?? "?"}
@@ -166,6 +225,16 @@ export const Card: React.FC<CardProps> = ({
             caption={(p.caption as string) ?? sentence}
             lottie_opacity={p.lottie_opacity as number | undefined}
             {...motion}
+          />
+        );
+      case "concept_map":
+        return (
+          <DynamicConceptMap
+            nodes={(p.nodes as Array<{ id: string; label: string; x: number; y: number }>) ?? []}
+            edges={(p.edges as Array<{ from: string; to: string; label?: string }>) ?? []}
+            keyframes={(p.keyframes as Array<{ id: string; atSec: number }>) ?? []}
+            palette={motion.palette}
+            fadeInDurationMs={p.fade_in_duration_ms as number | undefined}
           />
         );
       default: {

@@ -279,6 +279,249 @@ TRANSITION_DURATION_FRAMES = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Editing-rhythm rules (Murch + Eisenstein + Dmytryk + Cinemetrics + BBC GEL)
+# See docs/research/methodology/editing/*.md
+# -----------------------------------------------------------------------------
+
+# Component baseline durations (seconds) — calibrated to bilibili-commentary
+# pacing per Cinemetrics evidence (5s avg shot ≈ healthy for that audience).
+COMPONENT_BASELINE_SEC = {
+    "title_card": 5.0,            # 章节卡, 给观众喘息
+    "pull_quote": 4.5,            # 引言, 留时间读
+    "key_number": 2.8,            # 数字一眼看完
+    "comparison_panel": 6.0,      # 对比要时间扫
+    "list_item": 4.0,             # base, 每多 1 item +0.5s
+    "keyword_highlight": 3.0,     # 单关键词高亮
+    "lottie": 3.5,                # 氛围动效
+}
+
+# LLM-supplied pacing_intent → multiplier on the baseline
+PACING_MULTIPLIER = {
+    "fast": 0.7,
+    "medium": 1.0,
+    "slow": 1.4,
+}
+
+# BBC GEL on-screen text: ≥0.3s per CJK char, ≥0.12s per ascii char,
+# floor 2s; lower-third 3-7s window.
+MIN_SEC_PER_CJK_CHAR = 0.30
+MIN_SEC_PER_ASCII_CHAR = 0.12
+ABSOLUTE_MIN_DURATION_SEC = 2.0
+ABSOLUTE_MAX_DURATION_SEC = 8.0
+
+# Cinemetrics target avg (per target_style)
+TARGET_AVG_SEC_BY_STYLE = {
+    "tiktok": 2.5,
+    "bilibili_commentary": 5.0,  # vocut default audience
+    "edu_explainer": 8.0,
+    "documentary": 12.0,
+}
+
+
+def _count_text_chars(text: str) -> tuple[int, int]:
+    """Return (cjk_chars, ascii_chars). Whitespace ignored."""
+    cjk = ascii_ = 0
+    for c in text:
+        if c.isspace():
+            continue
+        if ord(c) > 127:
+            cjk += 1
+        else:
+            ascii_ += 1
+    return cjk, ascii_
+
+
+def _bbc_min_duration_for_props(component: str, props: dict[str, Any]) -> float:
+    """Sum visible text fields and apply BBC dwell-time floor."""
+    # Fields actually rendered on-screen per component, conservative superset
+    text_fields = (
+        "primary", "secondary", "unit", "label", "body",
+        "quote", "attribution", "title", "subtitle", "text",
+    )
+    cjk = ascii_ = 0
+    for f in text_fields:
+        v = props.get(f)
+        if isinstance(v, str):
+            a, b = _count_text_chars(v)
+            cjk += a
+            ascii_ += b
+    if component == "list_item":
+        items = props.get("items") or []
+        for it in items:
+            if isinstance(it, str):
+                a, b = _count_text_chars(it)
+                cjk += a
+                ascii_ += b
+    if component == "comparison_panel":
+        for side in ("left", "right"):
+            blk = props.get(side)
+            if isinstance(blk, dict):
+                for f in text_fields:
+                    v = blk.get(f)
+                    if isinstance(v, str):
+                        a, b = _count_text_chars(v)
+                        cjk += a
+                        ascii_ += b
+    secs = cjk * MIN_SEC_PER_CJK_CHAR + ascii_ * MIN_SEC_PER_ASCII_CHAR
+    return max(ABSOLUTE_MIN_DURATION_SEC, secs)
+
+
+def _get_component_for_item(item: dict[str, Any]) -> str | None:
+    m = item.get("match", {})
+    t = m.get("type")
+    if t == "motion_graphic":
+        return m.get("component")
+    if t == "hybrid":
+        ov = m.get("overlay") or {}
+        return ov.get("component")
+    return None
+
+
+def _get_props_for_item(item: dict[str, Any]) -> dict[str, Any]:
+    m = item.get("match", {})
+    t = m.get("type")
+    if t == "motion_graphic":
+        return m.get("props", {}) or {}
+    if t == "hybrid":
+        ov = m.get("overlay") or {}
+        return ov.get("props", {}) or {}
+    return {}
+
+
+def _apply_editing_durations(plan_items: list[dict[str, Any]]) -> dict[str, Any]:
+    """For every motion_graphic / hybrid-overlay scene compute
+      duration_estimate_sec = max(BBC_text_floor, baseline × pacing_factor),
+    clamped to [ABSOLUTE_MIN, ABSOLUTE_MAX].
+
+    Footage scenes keep their existing duration_estimate_sec (clip length).
+
+    Returns stats: {by_pacing, avg_sec, mg_count, footage_count, warnings[]}.
+    Mutates plan_items in place.
+    """
+    stats: dict[str, Any] = {
+        "by_pacing": {"fast": 0, "medium": 0, "slow": 0},
+        "mg_count": 0,
+        "footage_count": 0,
+        "warnings": [],
+    }
+    durations: list[float] = []
+    for item in plan_items:
+        m = item.get("match", {})
+        kind = m.get("type", "motion_graphic")
+        judgment = item.get("editing_judgment", {}) or {}
+        pacing = judgment.get("pacing_intent", "medium")
+        multiplier = PACING_MULTIPLIER.get(pacing, 1.0)
+        stats["by_pacing"][pacing] = stats["by_pacing"].get(pacing, 0) + 1
+
+        if kind == "footage":
+            stats["footage_count"] += 1
+            existing = item.get("duration_estimate_sec")
+            if existing is not None:
+                durations.append(float(existing))
+            continue
+
+        component = _get_component_for_item(item) or "keyword_highlight"
+        props = _get_props_for_item(item)
+        baseline = COMPONENT_BASELINE_SEC.get(component, 3.0)
+        # list_item gets extra time per bullet (BBC reading-speed extrapolation)
+        if component == "list_item":
+            n_items = len(props.get("items") or [])
+            baseline += max(0, n_items - 2) * 0.5
+        intended = baseline * multiplier
+        text_floor = _bbc_min_duration_for_props(component, props)
+        chosen = max(intended, text_floor)
+        chosen = min(ABSOLUTE_MAX_DURATION_SEC, max(ABSOLUTE_MIN_DURATION_SEC, chosen))
+        item["duration_estimate_sec"] = round(chosen, 2)
+        durations.append(chosen)
+        stats["mg_count"] += 1
+
+        # Warn when LLM said "fast" but BBC floor overrode it heavily
+        if pacing == "fast" and text_floor > intended * 1.5:
+            stats["warnings"].append({
+                "scene_idx": item.get("sentence_idx"),
+                "kind": "fast_overridden_by_text_floor",
+                "llm_wanted_sec": round(intended, 2),
+                "bbc_floor_sec": round(text_floor, 2),
+            })
+
+    stats["avg_sec"] = round(sum(durations) / len(durations), 2) if durations else 0.0
+    return stats
+
+
+def _cinemetrics_advisory(
+    plan_items: list[dict[str, Any]],
+    target_style: str,
+) -> dict[str, Any]:
+    """Compute total video sec vs. Cinemetrics-derived comfort zone for the
+    target audience. Pure advisory — does not mutate. Returns advisory dict.
+    """
+    target_avg = TARGET_AVG_SEC_BY_STYLE.get(target_style, 5.0)
+    durations = [
+        float(it.get("duration_estimate_sec") or 0)
+        for it in plan_items
+        if it.get("duration_estimate_sec") is not None
+    ]
+    if not durations:
+        return {"target_style": target_style, "target_avg_sec": target_avg, "ok": True}
+    avg = sum(durations) / len(durations)
+    total = sum(durations)
+    healthy_scene_count = max(1, int(round(total / target_avg)))
+    delta_pct = (target_avg - avg) / target_avg * 100
+    return {
+        "target_style": target_style,
+        "target_avg_sec": target_avg,
+        "actual_avg_sec": round(avg, 2),
+        "actual_scene_count": len(durations),
+        "total_video_sec": round(total, 2),
+        "healthy_scene_count_for_style": healthy_scene_count,
+        "delta_pct": round(delta_pct, 1),
+        # ok if within ±20% of target avg
+        "ok": abs(delta_pct) <= 20.0,
+    }
+
+
+def _check_visual_continuity(plan_items: list[dict[str, Any]]) -> dict[str, Any]:
+    """30°-rule analog for vocut: consecutive scenes using the same component
+    + same palette + same bg_style read like a jump cut. Flag them so render
+    or a future re-plan pass can break the tie.
+
+    Pure advisory — does not mutate scenes. Returns:
+      {jump_cuts: [{idx, reason}], same_palette_runs: int}
+    """
+    jump_cuts: list[dict[str, Any]] = []
+    same_palette_run = 0
+    max_palette_run = 0
+    last_palette = None
+    for i in range(1, len(plan_items)):
+        prev = plan_items[i - 1]
+        cur = plan_items[i]
+        prev_comp = _get_component_for_item(prev)
+        cur_comp = _get_component_for_item(cur)
+        prev_props = _get_props_for_item(prev)
+        cur_props = _get_props_for_item(cur)
+        if prev_comp and prev_comp == cur_comp and prev_comp != "title_card":
+            # same component back-to-back; check if bg also identical
+            if prev_props.get("palette") == cur_props.get("palette") and \
+               prev_props.get("bg_style") == cur_props.get("bg_style"):
+                jump_cuts.append({
+                    "idx": i,
+                    "reason": f"same component '{cur_comp}' + same palette + same bg as prev",
+                })
+        cur_pal = cur_props.get("palette")
+        if cur_pal and cur_pal == last_palette:
+            same_palette_run += 1
+            max_palette_run = max(max_palette_run, same_palette_run)
+        else:
+            same_palette_run = 1
+            last_palette = cur_pal
+    return {
+        "jump_cuts": jump_cuts,
+        "max_consecutive_same_palette": max_palette_run,
+    }
+
+
+
 def _assign_transitions(plan_items: list[dict[str, Any]]) -> dict[str, int]:
     """给每个 scene 加 transition_to_next 字段, 按转场宪法 §6 规则:
       - 当前是 title_card → 接下来用 slide (章节切换感)
@@ -691,7 +934,46 @@ LLM_SYSTEM_PROMPT = """你是 vocut 的"视频编辑导演"，把配音稿和素
 
 vocut 把视频拆成一连串「场景 (scene)」，每个场景对应配音稿里的一句话。你的工作是
 为每一句决定它的视觉形态，遵守下方的硬规则——这些规则提炼自 v0 (Vercel)、Material
-Design、IBM Carbon、BBC GEL、Refactoring UI 等开源设计系统的共识。
+Design、IBM Carbon、BBC GEL、Refactoring UI 等设计系统，以及 Walter Murch《In the
+Blink of an Eye》/ Eisenstein 蒙太奇五法 / Edward Dmytryk《On Film Editing》三套
+电影剪辑原典的共识。
+
+═══════════════════════════════════════════════════════════════════════════
+§ 0 编辑判断 (FIRST PRIORITY · Murch 51%/23%/10% 权重)
+═══════════════════════════════════════════════════════════════════════════
+
+**在选组件之前**，先回答 3 个问题。这 3 个判断是 Murch 六法则里最重要的前 3 层
+(情绪 51% + 故事 23% + 节奏 10% = 84% 决策权重)。组件 / 颜色 / 版式只是后 16%。
+
+§ 0.1  emotion_beat (情绪节拍 · 必选其一)
+  - "hook"     钩子：抛悬念、惊讶感、不寻常数据 → 观众"咦?"
+  - "tension"  紧张：矛盾、对抗、问题揭露 → 观众"皱眉"
+  - "calm"     舒缓：背景、铺垫、过渡 → 观众"听着"
+  - "release"  释放：答案、解决、揭晓 → 观众"哦~"
+  - "punch"    重拳：金句、观点、宣言 → 观众"对啊!"
+
+§ 0.2  narrative_role (叙事功能 · 必选其一)
+  - "opening"      开篇钩子
+  - "evidence"     数据 / 事实论证
+  - "claim"        观点抛出 / 论断
+  - "example"      案例 / 故事举例
+  - "atmosphere"   氛围铺垫 / 情绪渲染
+  - "closing"      收束 / 总结 / 呼吁
+
+§ 0.3  pacing_intent (节奏意图 · 必选其一)
+  - "fast"   快闪 (1.5-2.5s)：数据冲击、连续列举、快速过场
+  - "medium" 中速 (3-5s)：常规叙述、单一论点
+  - "slow"   长停 (5-8s)：金句、转折、章节、情绪高点
+
+§ 0.4  Dmytryk 第 7 律：**内容第一，形式第二**
+  - **先**根据 § 0.1/0.2/0.3 想清楚"这一段在干嘛"
+  - **再**根据 § B 选组件
+  - 不要因为某组件"看起来好看"就选它，组件是服务于编辑判断的工具
+
+§ 0.5  Dmytryk 第 1 律：**没有正向理由不要切**
+  - 如果当前句和前一句在 narrative_role 完全相同 (都是 evidence)，且数据相关 →
+    可能应该合并到一个 comparison_panel / list_item，而不是切两段独立 key_number
+  - 在 reasoning 里如果你建议合并，明确写"建议合并到 scene N"
 
 ═══════════════════════════════════════════════════════════════════════════
 § A 场景类型选择 (TYPE)
@@ -833,6 +1115,38 @@ vocut 组件已经定好了版式，但你要理解一个总原则：
   ❌ list_item items 数量 ≤ 1 (同上)
   ❌ 给 lottie 不给 lottie_tag
   ❌ 凭多样性强行换组件 (按句意挑，多样性后处理自动管)
+
+═══════════════════════════════════════════════════════════════════════════
+§ H 动态 PPT 套路 (W.x 新)
+═══════════════════════════════════════════════════════════════════════════
+
+vocut 4 个 motion_graphic 组件 (list_item / pull_quote / keyword_highlight /
+key_number) 已经自动用了 10 个行业套路 (见 docs/research/methodology/
+research-to-code-map.md §IV):
+
+  list_item         → Staggered List Reveal (排队进场, 默认 stagger 120ms)
+  pull_quote        → Sequential Word Reveal (中文按字 80ms / 英文按词 120ms)
+  keyword_highlight → Sequential Word + Trim Path Underline (描边强调)
+  key_number        → Number Counter (数字滚动 800-1200ms ease-out)
+
+来源: Material Design 3 + Apple HIG + NN/G + Brownie kinetic typography +
+CMU Sequential Reveal 论文 (V.8 第二轮调研, 详见 02c-design-patterns-research.md).
+
+**你 (LLM) 通常不用管动画**, 组件自动选合理参数. 但可以给以下可选字段微调:
+
+  props.stagger_ms       - 排队间隔 ms (list/quote/highlight, 默认 80-180ms)
+  props.item_duration_ms - 单项入场时长 (list, 默认 500ms)
+  props.duration_ms      - 数字滚动总长 (key_number, 默认按数字量级 800-1200ms)
+
+§ H.1 硬约束 (绝对违反不允许):
+  ❌ keyword_highlight 同时 highlight > 1 个关键词 (主焦点不能拆)
+  ❌ list_item items > 5 项还逐项 stagger (改"分组", 不在本期支持)
+  ❌ pull_quote attribution 编造 (Dmytryk #7 内容第一)
+
+§ H.2 何时该用慢 / 紧:
+  - 严肃 essay / 哲学 / 知识科普 → stagger_ms 用偏紧的下限 (e.g. list=120, quote=80)
+  - 二次元 / 轻松 / 娱乐 → stagger_ms 可用偏松的上限 (e.g. list=180, quote=120)
+  - 紧凑 hook 段 (前 30s) → 比默认快 30% (list=80, quote=60)
 """
 
 RERANK_TOOL = {
@@ -877,8 +1191,39 @@ RERANK_TOOL = {
                 "type": "string",
                 "description": "One-line justification",
             },
+            "emotion_beat": {
+                "type": "string",
+                "enum": ["hook", "tension", "calm", "release", "punch"],
+                "description": (
+                    "Murch's emotion layer (51%% weight). The audience-side feeling "
+                    "this scene should leave: hook=curiosity, tension=conflict, "
+                    "calm=ambient, release=resolution, punch=statement."
+                ),
+            },
+            "narrative_role": {
+                "type": "string",
+                "enum": [
+                    "opening", "evidence", "claim", "example", "atmosphere", "closing",
+                ],
+                "description": (
+                    "Murch's story layer (23%% weight). What this sentence does in the "
+                    "argument: opening hook / evidence-data / claim-statement / "
+                    "example-case / atmosphere-bridge / closing-summary."
+                ),
+            },
+            "pacing_intent": {
+                "type": "string",
+                "enum": ["fast", "medium", "slow"],
+                "description": (
+                    "Murch's rhythm layer (10%% weight). fast=1.5-2.5s (numbers/list), "
+                    "medium=3-5s (default narration), slow=5-8s (punchline/chapter)."
+                ),
+            },
         },
-        "required": ["type", "confidence", "reasoning"],
+        "required": [
+            "type", "confidence", "reasoning",
+            "emotion_beat", "narrative_role", "pacing_intent",
+        ],
     },
 }
 
@@ -1089,6 +1434,14 @@ def build_plan_item(
     }
     if sentence.get("preceding_headers"):
         item["preceding_headers"] = sentence["preceding_headers"]
+    # Murch's emotion/story/rhythm layers — LLM-supplied when available,
+    # default to neutral medium otherwise so heuristic-pick paths still get
+    # sensible pacing downstream.
+    item["editing_judgment"] = {
+        "emotion_beat": match.get("emotion_beat", "calm"),
+        "narrative_role": match.get("narrative_role", "evidence"),
+        "pacing_intent": match.get("pacing_intent", "medium"),
+    }
     match_type = match.get("type", "motion_graphic")
 
     if match_type == "footage" or match_type == "hybrid":
@@ -1423,6 +1776,15 @@ def plan(
     # up with the rendered scene list).
     _stamp_scene_metadata(plan_items)
 
+    # Editing-rhythm pass (Murch + BBC + Cinemetrics):
+    #   1. compute per-scene duration_estimate_sec from text + pacing_intent
+    #   2. advisory: is overall pace in the target-style comfort zone?
+    #   3. advisory: any "jump cut" runs (30° rule analog)?
+    editing_stats = _apply_editing_durations(plan_items)
+    target_style = os.environ.get("VOCUT_TARGET_VIDEO_STYLE", "bilibili_commentary")
+    pace_advisory = _cinemetrics_advisory(plan_items, target_style)
+    continuity_advisory = _check_visual_continuity(plan_items)
+
     # Assign scene-to-scene transitions per the transitions charter
     # (docs/research/methodology/transitions-charter.md).
     transition_stats = _assign_transitions(plan_items)
@@ -1440,11 +1802,38 @@ def plan(
             "topk": topk,
             "style": style_stats,
             "transitions": transition_stats,
+            "editing": editing_stats,
+            "pace_advisory": pace_advisory,
+            "continuity_advisory": continuity_advisory,
             "reference_image": str(reference_image.resolve()) if reference_image else None,
             "reference_description": reference_description,
         },
         "plan": plan_items,
     }
+
+    # Surface pacing warnings prominently — Cinemetrics says most B 站杂谈
+    # users expect ~5s/scene; if vocut is below 4s avg the video will feel
+    # rushed (the "都有点快" complaint).
+    if not pace_advisory.get("ok", True):
+        actual = pace_advisory.get("actual_avg_sec")
+        target = pace_advisory.get("target_avg_sec")
+        delta = pace_advisory.get("delta_pct")
+        suggested = pace_advisory.get("healthy_scene_count_for_style")
+        actual_count = pace_advisory.get("actual_scene_count")
+        print(
+            f"  ⚠ pace_advisory: avg {actual}s/scene vs target {target}s "
+            f"({delta:+.1f}%). Cinemetrics suggests ~{suggested} scenes for this "
+            f"video length (you have {actual_count}).",
+            file=sys.stderr,
+        )
+    if continuity_advisory.get("jump_cuts"):
+        n = len(continuity_advisory["jump_cuts"])
+        print(
+            f"  ⚠ continuity_advisory: {n} potential jump-cut(s) (same "
+            f"component+palette+bg back-to-back). See plan.json → "
+            f"meta.continuity_advisory.",
+            file=sys.stderr,
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(plan_doc, indent=2, ensure_ascii=False))
