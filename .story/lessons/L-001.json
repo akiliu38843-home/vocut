@@ -1,0 +1,18 @@
+{
+  "content": "env: VOCUT_LLM_BASE_URL=https://sz.uyilink.com/v1 + VOCUT_LLM_MODEL=gpt-5.4-mini. 默认 OpenAI 兼容协议. 跟 lovelab 同 provider, 同'默认模型必报错'坑.",
+  "context": "已写死在 ~/.zshrc env. 沿用 lovelab 经验.",
+  "createdDate": "2026-05-26",
+  "id": "L-001",
+  "lastValidated": "2026-05-26",
+  "reinforcements": 0,
+  "source": "manual",
+  "status": "active",
+  "supersedes": null,
+  "tags": [
+    "vocut",
+    "llm",
+    "uyilink"
+  ],
+  "title": "vocut LLM 必须用 uyilink + GPT-5.x 系列",
+  "updatedDate": "2026-05-26"
+}

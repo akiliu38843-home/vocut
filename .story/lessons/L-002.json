@@ -1,0 +1,18 @@
+{
+  "content": "footage transcript 用 faster-whisper, embedding 用 bge-small-zh-v1.5(默认偏中文). 处理英文素材时切换其他 model 而非用默认. sqlite 存 raw bytes BLOBs(P0), P1 才换 sqlite-vec.",
+  "context": "用户=中文知识博主场景, 配音稿和素材都是中文为主.",
+  "createdDate": "2026-05-26",
+  "id": "L-002",
+  "lastValidated": "2026-05-26",
+  "reinforcements": 0,
+  "source": "manual",
+  "status": "active",
+  "supersedes": null,
+  "tags": [
+    "vocut",
+    "embedding",
+    "zh"
+  ],
+  "title": "vocut 中文优先: embedding 默认 bge-small-zh-v1.5",
+  "updatedDate": "2026-05-26"
+}

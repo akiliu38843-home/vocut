@@ -1,0 +1,12 @@
+{
+  "blockedBy": [],
+  "completedDate": null,
+  "createdDate": "2026-05-26",
+  "description": "P0 dogfood 完成后才开 P1. 配方=Remotion + Claude design-style 代码驱动的动画卡片(填配音稿缺图段). 10-15 个为最小可用集合.",
+  "id": "T-002",
+  "order": 20,
+  "phase": "p0",
+  "status": "open",
+  "title": "P1: 10-15 个 motion graphic 组件库",
+  "type": "feature"
+}

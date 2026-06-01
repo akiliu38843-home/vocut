@@ -1,0 +1,12 @@
+{
+  "blockedBy": [],
+  "completedDate": null,
+  "createdDate": "2026-05-26",
+  "description": "P0 通关条件 = 至少做完 1 个真实长视频(知识博主场景, 15min+) 走完 fetch→index→plan→render→输出 mp4 全管线. 当前 P0.1/0.1.5/0.2/0.4 已 ✓, 需要拼出真实端到端用例.",
+  "id": "T-001",
+  "order": 10,
+  "phase": "p0",
+  "status": "open",
+  "title": "P0 dogfood: 用 vocut 产 1 支真实 15min+ 长视频",
+  "type": "task"
+}
